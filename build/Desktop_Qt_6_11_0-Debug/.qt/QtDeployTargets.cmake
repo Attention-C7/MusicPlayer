@@ -1,2 +1,0 @@
-set(__QT_DEPLOY_TARGET_MusicPlayer_FILE /home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/MusicPlayer)
-set(__QT_DEPLOY_TARGET_MusicPlayer_TYPE EXECUTABLE)

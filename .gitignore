@@ -1,0 +1,18 @@
+# Qt build output
+build/
+*.user
+*.autosave
+
+# Qt Creator
+.qtcreator/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Binary
+*.o
+*.a
+*.so
+MusicPlayer
