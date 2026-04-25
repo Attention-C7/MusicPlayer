@@ -1,0 +1,9 @@
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/MusicPlayer.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/edit_cache.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/rebuild_cache.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/list_install_components.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/install.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/install/local.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/install/strip.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/MusicPlayer_autogen_timestamp_deps.dir
+/home/carui-dev/Qt_practice/MusicPlayer/build/Desktop_Qt_6_11_0-Debug/CMakeFiles/MusicPlayer_autogen.dir
