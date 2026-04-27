@@ -1,7 +1,11 @@
-#ifndef MUSICPLAYER_H
-#define MUSICPLAYER_H
+#pragma once
 
 #include <QWidget>
+#include <QStackedWidget>
+
+#include "listwidget.h"
+#include "playercontroller.h"
+#include "playwidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -19,5 +23,8 @@ public:
 
 private:
     Ui::MusicPlayer *ui;
+    QStackedWidget *m_stack;
+    PlayerController *m_controller;
+    PlayWidget *m_playWidget;
+    ListWidget *m_listWidget;
 };
-#endif // MUSICPLAYER_H
