@@ -1,6 +1,7 @@
 #include "playercontroller.h"
 
 #include <QMediaMetaData>
+#include <QPixmap>
 #include <QRandomGenerator>
 #include <QUrl>
 
@@ -234,6 +235,24 @@ void PlayerController::updateSongMetaData()
         song.album = album;
     }
 
+    QPixmap albumArt;
+    const QVariant thumbnailValue = metaData.value(QMediaMetaData::ThumbnailImage);
+    if (thumbnailValue.canConvert<QPixmap>()) {
+        albumArt = qvariant_cast<QPixmap>(thumbnailValue);
+    } else if (thumbnailValue.canConvert<QImage>()) {
+        albumArt = QPixmap::fromImage(qvariant_cast<QImage>(thumbnailValue));
+    }
+
+    if (albumArt.isNull()) {
+        const QVariant coverValue = metaData.value(QMediaMetaData::CoverArtImage);
+        if (coverValue.canConvert<QPixmap>()) {
+            albumArt = qvariant_cast<QPixmap>(coverValue);
+        } else if (coverValue.canConvert<QImage>()) {
+            albumArt = QPixmap::fromImage(qvariant_cast<QImage>(coverValue));
+        }
+    }
+
+    emit albumArtChanged(albumArt);
     emit songChanged(song);
 }
 

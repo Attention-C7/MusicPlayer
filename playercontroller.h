@@ -4,6 +4,7 @@
 #include <QAudioOutput>
 #include <QList>
 #include <QMediaPlayer>
+#include <QPixmap>
 #include <QTimer>
 
 #include "songinfo.h"
@@ -38,6 +39,7 @@ signals:
     void playModeChanged(PlayMode mode);
     void currentIndexChanged(int index);
     void errorOccurred(QString message);
+    void albumArtChanged(QPixmap pixmap);
 
 private:
     static constexpr int SeekIntervalMs = 100;

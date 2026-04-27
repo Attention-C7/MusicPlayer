@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
     }
 
     QPushButton:pressed {
-        background-color: #333355;
+        background-color: transparent;
     }
 
     QPushButton#btn_playPause {
@@ -135,7 +135,8 @@ int main(int argc, char *argv[])
 
     QPushButton#btn_back:hover {
         color: #ffffff;
-        border-color: #ff6900;
+        border-color: #55557a;
+        background-color: #2a2a3e;
     }
 
     QLabel#lbl_currentPath {

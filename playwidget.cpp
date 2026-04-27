@@ -3,6 +3,8 @@
 
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPainterPath>
 
 PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     : QWidget(parent)
@@ -27,6 +29,8 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->lbl_title->setText(QStringLiteral("-"));
     ui->lbl_artist->setText(QStringLiteral("<unknown>"));
     ui->lbl_album->setText(QStringLiteral("<unknown>"));
+    ui->lbl_albumArt->setText(QStringLiteral("♪"));
+    ui->lbl_albumArt->setPixmap(QPixmap());
 
     connect(m_controller, &PlayerController::songChanged, this, [this](SongInfo info) {
         QString title = info.title.trimmed();
@@ -84,6 +88,17 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
 
     connect(m_controller, &PlayerController::errorOccurred, this, [this](const QString &message) {
         QMessageBox::warning(this, QStringLiteral("Playback Error"), message);
+    });
+
+    connect(m_controller, &PlayerController::albumArtChanged, this, [this](const QPixmap &pixmap) {
+        if (pixmap.isNull()) {
+            ui->lbl_albumArt->setPixmap(QPixmap());
+            ui->lbl_albumArt->setText(QStringLiteral("♪"));
+            return;
+        }
+
+        ui->lbl_albumArt->setText(QString());
+        ui->lbl_albumArt->setPixmap(roundedAlbumArt(pixmap));
     });
 
     connect(ui->btn_playPause, &QPushButton::clicked, this, [this]() {
@@ -207,6 +222,34 @@ QString PlayWidget::playModeText(PlayMode mode) const
         return QStringLiteral("🔀");
     }
     return QStringLiteral("🔁");
+}
+
+QPixmap PlayWidget::roundedAlbumArt(const QPixmap &pixmap) const
+{
+    if (pixmap.isNull()) {
+        return QPixmap();
+    }
+
+    const QSize targetSize(160, 160);
+    const QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+
+    QPixmap result(targetSize);
+    result.fill(Qt::transparent);
+
+    QPainter painter(&result);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    QPainterPath path;
+    path.addRoundedRect(QRectF(0.0, 0.0, targetSize.width(), targetSize.height()), 12.0, 12.0);
+    painter.setClipPath(path);
+
+    const int offsetX = (scaled.width() - targetSize.width()) / 2;
+    const int offsetY = (scaled.height() - targetSize.height()) / 2;
+    painter.drawPixmap(-offsetX, -offsetY, scaled);
+    painter.end();
+
+    return result;
 }
 
 void PlayWidget::updateIndexLabel()
