@@ -14,7 +14,11 @@ int main(int argc, char *argv[])
     }
 
     QLabel {
-        border: none;
+        background-color: transparent;
+    }
+
+    QSlider {
+        background-color: transparent;
     }
 
     QLabel#lbl_title {

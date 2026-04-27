@@ -17,11 +17,12 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     , m_longPressTriggered(false)
 {
     ui->setupUi(this);
+    setAttribute(Qt::WA_TranslucentBackground, false);
+    setAutoFillBackground(false);
 
     m_bgLabel = new QLabel(this);
     m_bgLabel->setGeometry(0, 0, 800, 500);
     m_bgLabel->setScaledContents(true);
-    m_bgLabel->setStyleSheet(QStringLiteral("border: none;"));
     auto *blurEffect = new QGraphicsBlurEffect(m_bgLabel);
     blurEffect->setBlurRadius(40.0);
     m_bgLabel->setGraphicsEffect(blurEffect);
