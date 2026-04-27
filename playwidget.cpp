@@ -43,6 +43,12 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->lbl_album->setText(QStringLiteral("<unknown>"));
     ui->lbl_albumArt->setText(QStringLiteral("♪"));
     ui->lbl_albumArt->setPixmap(QPixmap());
+    ui->lbl_title->setStyleSheet(QStringLiteral("background:transparent;"));
+    ui->lbl_artist->setStyleSheet(QStringLiteral("background:transparent;"));
+    ui->lbl_album->setStyleSheet(QStringLiteral("background:transparent;"));
+    ui->lbl_index->setStyleSheet(QStringLiteral("background:transparent;"));
+    ui->lbl_currentTime->setStyleSheet(QStringLiteral("background:transparent;"));
+    ui->lbl_totalTime->setStyleSheet(QStringLiteral("background:transparent;"));
 
     connect(m_controller, &PlayerController::songChanged, this, [this](SongInfo info) {
         QString title = info.title.trimmed();
