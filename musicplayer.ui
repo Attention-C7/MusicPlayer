@@ -6,18 +6,13 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>520</width>
-    <height>320</height>
+    <width>800</width>
+    <height>500</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>MusicPlayer</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout">
-   <item>
-    <widget class="QStackedWidget" name="stackedWidget"/>
-   </item>
-  </layout>
  </widget>
  <resources/>
  <connections/>

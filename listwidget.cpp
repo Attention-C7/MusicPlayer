@@ -5,6 +5,8 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QListWidgetItem>
+#include <QPainter>
+#include <QPaintEvent>
 #include <QVariant>
 
 namespace
@@ -19,6 +21,8 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     , m_controller(controller)
 {
     ui->setupUi(this);
+    setWindowFlags(Qt::FramelessWindowHint);
+    setAttribute(Qt::WA_TranslucentBackground);
 
     updateCurrentPathLabel();
 
@@ -163,4 +167,17 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
     }
 
     emit backToPlayerRequested();
+}
+
+void ListWidget::paintEvent(QPaintEvent *event)
+{
+    Q_UNUSED(event);
+
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(20, 20, 30, 210));
+
+    const QRectF bgRect = rect().adjusted(1.0, 1.0, -1.0, -1.0);
+    painter.drawRoundedRect(bgRect, 12.0, 12.0);
 }

@@ -31,6 +31,8 @@ signals:
     void backToPlayerRequested();
 
 private:
+    void paintEvent(QPaintEvent *event) override;
+
     enum ItemType
     {
         FolderItem = 1,

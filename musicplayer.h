@@ -1,7 +1,7 @@
 #pragma once
 
+#include <QPropertyAnimation>
 #include <QWidget>
-#include <QStackedWidget>
 
 #include "listwidget.h"
 #include "playercontroller.h"
@@ -22,9 +22,12 @@ public:
     ~MusicPlayer() override;
 
 private:
+    void showList();
+    void hideList();
+
     Ui::MusicPlayer *ui;
-    QStackedWidget *m_stack;
     PlayerController *m_controller;
     PlayWidget *m_playWidget;
     ListWidget *m_listWidget;
+    QPropertyAnimation *m_listAnimation;
 };
