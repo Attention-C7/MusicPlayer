@@ -23,6 +23,7 @@ public:
     void seek(qint64 position);
     void setPlayMode(PlayMode mode);
     int currentIndex() const;
+    int playlistCount() const;
     PlayMode playMode() const;
     void startSeekForward();
     void stopSeekForward();

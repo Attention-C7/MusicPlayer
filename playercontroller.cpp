@@ -148,6 +148,11 @@ int PlayerController::currentIndex() const
     return m_currentIndex;
 }
 
+int PlayerController::playlistCount() const
+{
+    return m_playlist.size();
+}
+
 PlayMode PlayerController::playMode() const
 {
     return m_playMode;
