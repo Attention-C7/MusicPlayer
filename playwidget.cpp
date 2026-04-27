@@ -209,6 +209,10 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
         m_pressDirection = 0;
         m_longPressTriggered = false;
     });
+
+    for (QWidget *w : findChildren<QWidget*>()) {
+        w->setAutoFillBackground(false);
+    }
 }
 
 PlayWidget::~PlayWidget()
