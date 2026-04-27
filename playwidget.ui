@@ -18,6 +18,12 @@
     <layout class="QHBoxLayout" name="horizontalLayout_top">
      <item>
       <widget class="QLabel" name="lbl_albumArt">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
        <property name="minimumSize">
         <size>
          <width>200</width>

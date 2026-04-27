@@ -198,15 +198,15 @@ QString PlayWidget::playModeText(PlayMode mode) const
 {
     switch (mode) {
     case PlayMode::SingleLoop:
-        return QStringLiteral("Single");
+        return QStringLiteral("🔂");
     case PlayMode::FolderLoop:
-        return QStringLiteral("Folder");
+        return QStringLiteral("📁🔁");
     case PlayMode::AllLoop:
-        return QStringLiteral("All");
+        return QStringLiteral("🔁");
     case PlayMode::RandomPlay:
-        return QStringLiteral("Random");
+        return QStringLiteral("🔀");
     }
-    return QStringLiteral("Single");
+    return QStringLiteral("🔁");
 }
 
 void PlayWidget::updateIndexLabel()
