@@ -21,6 +21,7 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     m_bgLabel = new QLabel(this);
     m_bgLabel->setGeometry(0, 0, 800, 500);
     m_bgLabel->setScaledContents(true);
+    m_bgLabel->setStyleSheet(QStringLiteral("border: none;"));
     auto *blurEffect = new QGraphicsBlurEffect(m_bgLabel);
     blurEffect->setBlurRadius(40.0);
     m_bgLabel->setGraphicsEffect(blurEffect);
@@ -281,7 +282,7 @@ void PlayWidget::updateBackground(const QPixmap &pixmap)
 
     QPainter painter(&scaled);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.fillRect(scaled.rect(), QColor(10, 10, 20, 160));
+    painter.fillRect(scaled.rect(), QColor(10, 10, 20, 200));
     painter.end();
 
     m_bgLabel->setPixmap(scaled);

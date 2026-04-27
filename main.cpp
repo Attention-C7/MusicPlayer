@@ -13,6 +13,10 @@ int main(int argc, char *argv[])
         font-size: 14px;
     }
 
+    QLabel {
+        border: none;
+    }
+
     QLabel#lbl_title {
         font-size: 26px;
         font-weight: bold;
@@ -81,7 +85,7 @@ int main(int argc, char *argv[])
     }
 
     QPushButton:pressed {
-        background-color: transparent;
+        background-color: #333355;
     }
 
     QPushButton#btn_playPause {
