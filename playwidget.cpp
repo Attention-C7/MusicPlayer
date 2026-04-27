@@ -21,7 +21,7 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->slider_progress->setRange(0, 0);
     ui->lbl_currentTime->setText(QStringLiteral("00:00"));
     ui->lbl_totalTime->setText(QStringLiteral("00:00"));
-    ui->btn_playPause->setText(QStringLiteral("Play"));
+    ui->btn_playPause->setText(QStringLiteral("▶"));
     ui->btn_playMode->setText(playModeText(m_controller->playMode()));
     ui->lbl_index->setText(QStringLiteral("0/0"));
     ui->lbl_title->setText(QStringLiteral("-"));
@@ -68,9 +68,9 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
 
     connect(m_controller, &PlayerController::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState state) {
         if (state == QMediaPlayer::PlayingState) {
-            ui->btn_playPause->setText(QStringLiteral("Pause"));
+            ui->btn_playPause->setText(QStringLiteral("⏸"));
         } else {
-            ui->btn_playPause->setText(QStringLiteral("Play"));
+            ui->btn_playPause->setText(QStringLiteral("▶"));
         }
     });
 

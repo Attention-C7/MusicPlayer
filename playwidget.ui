@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>520</width>
-    <height>240</height>
+    <width>800</width>
+    <height>500</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,34 +15,73 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout_main">
    <item>
-    <layout class="QVBoxLayout" name="verticalLayout_info">
+    <layout class="QHBoxLayout" name="horizontalLayout_top">
      <item>
-      <widget class="QLabel" name="lbl_title">
+      <widget class="QLabel" name="lbl_albumArt">
+       <property name="minimumSize">
+        <size>
+         <width>200</width>
+         <height>200</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>200</width>
+         <height>200</height>
+        </size>
+       </property>
        <property name="text">
-        <string>-</string>
+        <string>♪</string>
+       </property>
+       <property name="alignment">
+        <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>
      <item>
-      <widget class="QLabel" name="lbl_artist">
-       <property name="text">
-        <string>&lt;unknown&gt;</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="lbl_album">
-       <property name="text">
-        <string>&lt;unknown&gt;</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QLabel" name="lbl_index">
-       <property name="text">
-        <string>0/0</string>
-       </property>
-      </widget>
+      <layout class="QVBoxLayout" name="verticalLayout_info">
+       <item>
+        <widget class="QLabel" name="lbl_title">
+         <property name="text">
+          <string>-</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lbl_artist">
+         <property name="text">
+          <string>&lt;unknown&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lbl_album">
+         <property name="text">
+          <string>&lt;unknown&gt;</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QLabel" name="lbl_index">
+         <property name="text">
+          <string>0/0</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_info">
+         <property name="orientation">
+          <enum>Qt::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
      </item>
     </layout>
    </item>
@@ -76,35 +115,35 @@
      <item>
       <widget class="QPushButton" name="btn_prev">
        <property name="text">
-        <string>Prev</string>
+        <string>⏮</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btn_playPause">
        <property name="text">
-        <string>Play</string>
+        <string>▶</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btn_next">
        <property name="text">
-        <string>Next</string>
+        <string>⏭</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btn_playMode">
        <property name="text">
-        <string>Single</string>
+        <string>🔀</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btn_showList">
        <property name="text">
-        <string>List</string>
+        <string>☰</string>
        </property>
       </widget>
      </item>
