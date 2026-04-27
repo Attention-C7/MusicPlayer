@@ -284,18 +284,14 @@ void PlayWidget::updateBackground(const QPixmap &pixmap)
     }
 
     const QSize bgSize(800, 500);
-    QPixmap scaled = pixmap.scaled(bgSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-    if (scaled.size() != bgSize) {
-        const int offsetX = (scaled.width() - bgSize.width()) / 2;
-        const int offsetY = (scaled.height() - bgSize.height()) / 2;
-        scaled = scaled.copy(offsetX, offsetY, bgSize.width(), bgSize.height());
-    }
+    QPixmap scaled = pixmap.scaled(bgSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
     QPainter painter(&scaled);
     painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.fillRect(scaled.rect(), QColor(10, 10, 20, 200));
+    painter.fillRect(QRect(0, 0, bgSize.width(), bgSize.height()), QColor(10, 10, 20, 200));
     painter.end();
 
+    m_bgLabel->setScaledContents(true);
     m_bgLabel->setPixmap(scaled);
     m_bgLabel->show();
     m_bgLabel->lower();
