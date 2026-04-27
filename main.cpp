@@ -14,19 +14,19 @@ int main(int argc, char *argv[])
     }
 
     QLabel#lbl_title {
-        font-size: 20px;
+        font-size: 26px;
         font-weight: bold;
         color: #ffffff;
     }
 
     QLabel#lbl_artist {
-        font-size: 14px;
-        color: #aaaaaa;
+        font-size: 13px;
+        color: #9696a8;
     }
 
     QLabel#lbl_album {
         font-size: 12px;
-        color: #888888;
+        color: #7e7e92;
     }
 
     QLabel#lbl_index {
@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
     }
 
     QSlider#slider_progress::groove:horizontal {
-        height: 4px;
+        height: 3px;
         background: #333355;
         border-radius: 2px;
     }
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
         background-color: transparent;
         border: none;
         color: #cccccc;
-        font-size: 18px;
+        font-size: 22px;
         padding: 8px 12px;
         border-radius: 6px;
     }
@@ -85,9 +85,9 @@ int main(int argc, char *argv[])
     }
 
     QPushButton#btn_playPause {
-        font-size: 24px;
+        font-size: 22px;
         color: #ffffff;
-        background-color: #ff6900;
+        background-color: transparent;
         border-radius: 20px;
         padding: 10px 16px;
         min-width: 48px;
@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
     }
 
     QPushButton#btn_playPause:hover {
-        background-color: #ff8533;
+        background-color: #ff6900;
     }
 
     QPushButton#btn_playPause:pressed {
@@ -125,7 +125,7 @@ int main(int argc, char *argv[])
     }
 
     QPushButton#btn_back {
-        font-size: 14px;
+        font-size: 22px;
         color: #aaaaaa;
         background-color: transparent;
         border: 1px solid #333355;
