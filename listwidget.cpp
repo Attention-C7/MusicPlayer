@@ -86,14 +86,28 @@ void ListWidget::refreshList()
         auto *item = new QListWidgetItem(QStringLiteral("[%1]").arg(folderInfo.fileName()));
         item->setData(RoleItemType, FolderItem);
         item->setData(RolePath, subDirPath);
+        item->setSizeHint(QSize(0, 50));
         ui->listWidget_files->addItem(item);
     }
 
-    for (const SongInfo &song : m_currentSongs) {
+    const int numberWidth = QString::number(m_currentSongs.size()).size();
+    for (int i = 0; i < m_currentSongs.size(); ++i) {
+        const SongInfo &song = m_currentSongs[i];
         const QFileInfo songInfo(song.filePath);
-        auto *item = new QListWidgetItem(songInfo.fileName());
+        QString title = song.title.trimmed();
+        if (title.isEmpty()) {
+            title = songInfo.completeBaseName();
+        }
+        const QString artist = song.artist.trimmed();
+        const QString displayText = QStringLiteral("%1  %2\n%3")
+                                        .arg(i + 1, numberWidth, 10, QChar(' '))
+                                        .arg(title)
+                                        .arg(artist);
+
+        auto *item = new QListWidgetItem(displayText);
         item->setData(RoleItemType, FileItem);
         item->setData(RolePath, song.filePath);
+        item->setSizeHint(QSize(0, 50));
         ui->listWidget_files->addItem(item);
     }
 
@@ -112,17 +126,15 @@ void ListWidget::updateCurrentPathLabel()
 
 void ListWidget::updatePlayingHighlight()
 {
-    const QColor highlightColor(200, 235, 255);
-
     for (int i = 0; i < ui->listWidget_files->count(); ++i) {
         QListWidgetItem *item = ui->listWidget_files->item(i);
         const int type = item->data(RoleItemType).toInt();
         const QString path = item->data(RolePath).toString();
 
         if (type == FileItem && !m_currentPlayingFilePath.isEmpty() && path == m_currentPlayingFilePath) {
-            item->setBackground(QBrush(highlightColor));
+            item->setForeground(QBrush(QColor("#ff6900")));
         } else {
-            item->setBackground(QBrush(Qt::NoBrush));
+            item->setForeground(QBrush(QColor("#ffffff")));
         }
     }
 }

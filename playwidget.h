@@ -1,8 +1,10 @@
 #pragma once
 
+#include <QGraphicsBlurEffect>
+#include <QLabel>
 #include <QPixmap>
-#include <QWidget>
 #include <QTimer>
+#include <QWidget>
 
 #include "playercontroller.h"
 #include "songinfo.h"
@@ -28,9 +30,11 @@ private:
     QString formatTime(qint64 ms) const;
     QString playModeText(PlayMode mode) const;
     QPixmap roundedAlbumArt(const QPixmap &pixmap) const;
+    void updateBackground(const QPixmap &pixmap);
     void updateIndexLabel();
 
     Ui::PlayWidget *ui;
+    QLabel *m_bgLabel;
     PlayerController *m_controller;
     bool m_isDragging;
     QTimer *m_longPressTimer;

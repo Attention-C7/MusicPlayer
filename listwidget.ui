@@ -33,7 +33,11 @@
     </layout>
    </item>
    <item>
-    <widget class="QListWidget" name="listWidget_files"/>
+    <widget class="QListWidget" name="listWidget_files">
+     <property name="uniformItemSizes">
+      <bool>false</bool>
+     </property>
+    </widget>
    </item>
   </layout>
  </widget>
