@@ -2,6 +2,7 @@
 #include "./ui_musicplayer.h"
 #include <QPropertyAnimation>
 #include <QEasingCurve>
+#include <QDir>
 
 MusicPlayer::MusicPlayer(QWidget *parent)
     : QWidget(parent)
@@ -24,7 +25,9 @@ MusicPlayer::MusicPlayer(QWidget *parent)
     m_listWidget->setGeometry(width(), 0, 360, height());
     m_listWidget->hide();
 
-    m_listWidget->setRootPath(QStringLiteral("/Music"));
+    //m_listWidget->setRootPath(QStringLiteral("/Music"));
+    m_listWidget->setRootPath(QDir::homePath() + QStringLiteral("/Music"));
+
 
     connect(m_playWidget, &PlayWidget::showListRequested, this, &MusicPlayer::showList);
     connect(m_listWidget, &ListWidget::backToPlayerRequested, this, &MusicPlayer::hideList);
