@@ -32,6 +32,7 @@ set(PROJECT_SOURCES
         lrcparser.h
         filescanworker.cpp
         filescanworker.h
+        resources.qrc
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

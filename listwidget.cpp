@@ -166,8 +166,8 @@ void ListWidget::refreshList()
     m_currentSongs.clear();
     const QString currentDir = QDir::cleanPath(QDir(m_currentPath).absolutePath());
     for (const SongInfo &song : m_allSongs) {
-        const QString parentDir = QFileInfo(song.filePath).dir().absolutePath();
-        if (QDir::cleanPath(parentDir) == currentDir) {
+        const QString parentDir = QDir::cleanPath(QFileInfo(song.filePath).dir().absolutePath());
+        if (parentDir == currentDir) {
             m_currentSongs.append(song);
         }
     }
@@ -283,8 +283,8 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
         return;
     }
 
-    m_controller->setPlaylist(m_allSongs);
     m_controller->setFolderPlaylist(m_currentSongs);
+    m_controller->setPlaylist(m_allSongs);
 
     int targetIndex = -1;
     for (int i = 0; i < m_allSongs.size(); ++i) {

@@ -2,6 +2,7 @@
 #include "ui_playwidget.h"
 
 #include <QFileInfo>
+#include <QIcon>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
@@ -28,8 +29,22 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->slider_progress->setRange(0, 0);
     ui->lbl_currentTime->setText(QStringLiteral("00:00"));
     ui->lbl_totalTime->setText(QStringLiteral("00:00"));
-    ui->btn_playPause->setText(QStringLiteral("▶"));
-    ui->btn_playMode->setText(playModeText(m_controller->playMode()));
+    ui->btn_prev->setText(QString());
+    ui->btn_playPause->setText(QString());
+    ui->btn_next->setText(QString());
+    ui->btn_playMode->setText(QString());
+    ui->btn_showList->setText(QString());
+    ui->btn_prev->setIcon(QIcon(QStringLiteral(":/icons/icon/1previous.png")));
+    ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
+    ui->btn_next->setIcon(QIcon(QStringLiteral(":/icons/icon/4next.png")));
+    ui->btn_showList->setIcon(QIcon(QStringLiteral(":/icons/icon/10list.png")));
+    const QSize iconSize(28, 28);
+    ui->btn_prev->setIconSize(iconSize);
+    ui->btn_playPause->setIconSize(iconSize);
+    ui->btn_next->setIconSize(iconSize);
+    ui->btn_playMode->setIconSize(iconSize);
+    ui->btn_showList->setIconSize(iconSize);
+    setPlayModeIcon(m_controller->playMode());
     ui->lbl_index->setText(QStringLiteral("0/0"));
     ui->lbl_title->setText(QStringLiteral("-"));
     ui->lbl_artist->setText(QStringLiteral("<unknown>"));
@@ -86,14 +101,14 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
 
     connect(m_controller, &PlayerController::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState state) {
         if (state == QMediaPlayer::PlayingState) {
-            ui->btn_playPause->setText(QStringLiteral("⏸"));
+            ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/3pause.png")));
         } else {
-            ui->btn_playPause->setText(QStringLiteral("▶"));
+            ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
         }
     });
 
     connect(m_controller, &PlayerController::playModeChanged, this, [this](PlayMode mode) {
-        ui->btn_playMode->setText(playModeText(mode));
+        setPlayModeIcon(mode);
     });
 
     connect(m_controller, &PlayerController::currentIndexChanged, this, [this](int) {
@@ -239,19 +254,23 @@ QString PlayWidget::formatTime(qint64 ms) const
         .arg(seconds, 2, 10, QChar('0'));
 }
 
-QString PlayWidget::playModeText(PlayMode mode) const
+void PlayWidget::setPlayModeIcon(PlayMode mode)
 {
     switch (mode) {
     case PlayMode::SingleLoop:
-        return QStringLiteral("🔂");
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/5repeatone.png")));
+        return;
     case PlayMode::FolderLoop:
-        return QStringLiteral("📁🔁");
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/6repeatlist.png")));
+        return;
     case PlayMode::AllLoop:
-        return QStringLiteral("🔁");
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/7repeatall.png")));
+        return;
     case PlayMode::RandomPlay:
-        return QStringLiteral("🔀");
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/8shuffle.png")));
+        return;
     }
-    return QStringLiteral("🔁");
+    ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/7repeatall.png")));
 }
 
 void PlayWidget::updateLrcDisplay(qint64 position)

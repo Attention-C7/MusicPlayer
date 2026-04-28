@@ -29,7 +29,7 @@ signals:
 private:
     void paintEvent(QPaintEvent *event) override;
     QString formatTime(qint64 ms) const;
-    QString playModeText(PlayMode mode) const;
+    void setPlayModeIcon(PlayMode mode);
     QPixmap roundedAlbumArt(const QPixmap &pixmap) const;
     void updateLrcDisplay(qint64 position);
     void buildLrcLabels();
