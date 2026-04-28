@@ -26,6 +26,7 @@ public:
     void seek(qint64 position);
     void setPlayMode(PlayMode mode);
     int currentIndex() const;
+    int folderIndex() const;
     int playlistCount() const;
     int activePlaylistCount() const;
     PlayMode playMode() const;

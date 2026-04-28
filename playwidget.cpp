@@ -432,7 +432,12 @@ void PlayWidget::paintEvent(QPaintEvent *event)
 
 void PlayWidget::updateIndexLabel()
 {
-    const int index = m_controller->currentIndex();
+    int index = -1;
+    if (m_controller->playMode() == PlayMode::AllLoop) {
+        index = m_controller->currentIndex();
+    } else {
+        index = m_controller->folderIndex();
+    }
     const int total = m_controller->activePlaylistCount();
 
     const int displayIndex = (index >= 0) ? (index + 1) : 0;

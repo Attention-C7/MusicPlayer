@@ -226,6 +226,24 @@ int PlayerController::currentIndex() const
     return m_currentIndex;
 }
 
+int PlayerController::folderIndex() const
+{
+    if (m_folderPlaylist.isEmpty()) {
+        return -1;
+    }
+    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
+        return -1;
+    }
+
+    const QString currentPath = m_playlist[m_currentIndex].filePath;
+    for (int i = 0; i < m_folderPlaylist.size(); ++i) {
+        if (m_folderPlaylist[i].filePath == currentPath) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 int PlayerController::playlistCount() const
 {
     return m_playlist.size();
