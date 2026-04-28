@@ -7,6 +7,7 @@
 #include <QPixmap>
 #include <QTimer>
 
+#include "lrcparser.h"
 #include "songinfo.h"
 
 class PlayerController : public QObject
@@ -40,12 +41,14 @@ signals:
     void currentIndexChanged(int index);
     void errorOccurred(QString message);
     void albumArtChanged(QPixmap pixmap);
+    void lrcLoaded(QMap<qint64, QString> lyrics);
 
 private:
     static constexpr int SeekIntervalMs = 100;
     static constexpr qint64 SeekStepMs = 3000;
 
     void playByIndex(int index);
+    void loadLrc(const SongInfo &song);
     void updateSongMetaData();
     int randomIndexExcludingCurrent() const;
     void handleEndOfMedia();

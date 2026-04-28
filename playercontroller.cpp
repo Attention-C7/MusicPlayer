@@ -204,6 +204,18 @@ void PlayerController::playByIndex(int index)
     const QUrl source = QUrl::fromLocalFile(m_playlist[m_currentIndex].filePath);
     m_player->setSource(source);
     m_player->play();
+    loadLrc(m_playlist[m_currentIndex]);
+}
+
+void PlayerController::loadLrc(const SongInfo &song)
+{
+    if (song.lrcPath.isEmpty()) {
+        emit lrcLoaded(QMap<qint64, QString>());
+        return;
+    }
+
+    const QMap<qint64, QString> result = LrcParser::parse(song.lrcPath);
+    emit lrcLoaded(result);
 }
 
 void PlayerController::updateSongMetaData()
