@@ -49,6 +49,7 @@ private:
     void handleItemClicked(QListWidgetItem *item);
     void buildGroupMaps();
     void refreshGroupList(int tab);
+    void refreshAllSongsList();
     void handleGroupItemClicked(QListWidgetItem *item);
     void startBackgroundScan();
     void onScanFinished(QList<SongInfo> songs);

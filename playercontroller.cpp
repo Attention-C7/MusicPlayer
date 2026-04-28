@@ -10,7 +10,7 @@ PlayerController::PlayerController(QObject *parent)
     , m_player(new QMediaPlayer(this))
     , m_audioOutput(new QAudioOutput(this))
     , m_currentIndex(-1)
-    , m_playMode(PlayMode::AllLoop)
+    , m_playMode(PlayMode::FolderLoop)
     , m_seekTimer(new QTimer(this))
     , m_seekDirection(0)
 {
@@ -100,37 +100,36 @@ void PlayerController::prev()
         return;
     }
 
-    if (m_playMode == PlayMode::RandomPlay) {
-        playByIndex(randomIndexExcludingCurrent());
+    const QList<SongInfo> &activeList =
+        (m_playMode == PlayMode::AllLoop || m_folderPlaylist.isEmpty()) ? m_playlist : m_folderPlaylist;
+    if (activeList.isEmpty()) {
         return;
     }
 
-    if (m_playMode == PlayMode::FolderLoop) {
-        if (m_folderPlaylist.isEmpty()) {
-            return;
-        }
+    QString currentFilePath;
+    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+        currentFilePath = m_playlist[m_currentIndex].filePath;
+    } else {
+        currentFilePath = activeList.first().filePath;
+    }
 
-        QString currentFilePath;
-        if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
-            currentFilePath = m_playlist[m_currentIndex].filePath;
-        } else {
-            currentFilePath = m_folderPlaylist.first().filePath;
+    int currentActiveIndex = -1;
+    for (int i = 0; i < activeList.size(); ++i) {
+        if (activeList[i].filePath == currentFilePath) {
+            currentActiveIndex = i;
+            break;
         }
+    }
+    if (currentActiveIndex < 0) {
+        currentActiveIndex = 0;
+    }
 
-        int currentFolderIndex = -1;
-        for (int i = 0; i < m_folderPlaylist.size(); ++i) {
-            if (m_folderPlaylist[i].filePath == currentFilePath) {
-                currentFolderIndex = i;
-                break;
-            }
+    if (m_playMode == PlayMode::RandomPlay && activeList.size() > 1) {
+        int randomActiveIndex = currentActiveIndex;
+        while (randomActiveIndex == currentActiveIndex) {
+            randomActiveIndex = QRandomGenerator::global()->bounded(activeList.size());
         }
-        if (currentFolderIndex < 0) {
-            currentFolderIndex = 0;
-        }
-
-        const int prevFolderIndex =
-            (currentFolderIndex <= 0) ? (m_folderPlaylist.size() - 1) : (currentFolderIndex - 1);
-        const QString targetPath = m_folderPlaylist[prevFolderIndex].filePath;
+        const QString targetPath = activeList[randomActiveIndex].filePath;
         for (int i = 0; i < m_playlist.size(); ++i) {
             if (m_playlist[i].filePath == targetPath) {
                 playByIndex(i);
@@ -140,10 +139,13 @@ void PlayerController::prev()
         return;
     }
 
-    if (m_currentIndex <= 0) {
-        playByIndex(m_playlist.size() - 1);
-    } else {
-        playByIndex(m_currentIndex - 1);
+    const int prevActiveIndex = (currentActiveIndex <= 0) ? (activeList.size() - 1) : (currentActiveIndex - 1);
+    const QString targetPath = activeList[prevActiveIndex].filePath;
+    for (int i = 0; i < m_playlist.size(); ++i) {
+        if (m_playlist[i].filePath == targetPath) {
+            playByIndex(i);
+            return;
+        }
     }
 }
 
@@ -153,37 +155,33 @@ void PlayerController::next()
         return;
     }
 
-    if (m_playMode == PlayMode::RandomPlay) {
-        playByIndex(randomIndexExcludingCurrent());
+    const QList<SongInfo> &activeList =
+        (m_playMode == PlayMode::AllLoop || m_folderPlaylist.isEmpty()) ? m_playlist : m_folderPlaylist;
+    if (activeList.isEmpty()) {
         return;
     }
 
-    if (m_playMode == PlayMode::FolderLoop) {
-        if (m_folderPlaylist.isEmpty()) {
-            return;
+    QString currentFilePath;
+    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+        currentFilePath = m_playlist[m_currentIndex].filePath;
+    } else {
+        currentFilePath = activeList.first().filePath;
+    }
+
+    int currentActiveIndex = -1;
+    for (int i = 0; i < activeList.size(); ++i) {
+        if (activeList[i].filePath == currentFilePath) {
+            currentActiveIndex = i;
+            break;
         }
+    }
 
-        QString currentFilePath;
-        if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
-            currentFilePath = m_playlist[m_currentIndex].filePath;
-        } else {
-            currentFilePath = m_folderPlaylist.first().filePath;
+    if (m_playMode == PlayMode::RandomPlay && activeList.size() > 1) {
+        int randomActiveIndex = currentActiveIndex;
+        while (randomActiveIndex == currentActiveIndex) {
+            randomActiveIndex = QRandomGenerator::global()->bounded(activeList.size());
         }
-
-        int currentFolderIndex = -1;
-        for (int i = 0; i < m_folderPlaylist.size(); ++i) {
-            if (m_folderPlaylist[i].filePath == currentFilePath) {
-                currentFolderIndex = i;
-                break;
-            }
-        }
-
-        const int nextFolderIndex =
-            (currentFolderIndex < 0 || currentFolderIndex >= m_folderPlaylist.size() - 1)
-                ? 0
-                : (currentFolderIndex + 1);
-        const QString targetPath = m_folderPlaylist[nextFolderIndex].filePath;
-
+        const QString targetPath = activeList[randomActiveIndex].filePath;
         for (int i = 0; i < m_playlist.size(); ++i) {
             if (m_playlist[i].filePath == targetPath) {
                 playByIndex(i);
@@ -193,10 +191,14 @@ void PlayerController::next()
         return;
     }
 
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size() - 1) {
-        playByIndex(0);
-    } else {
-        playByIndex(m_currentIndex + 1);
+    const int nextActiveIndex =
+        (currentActiveIndex < 0 || currentActiveIndex >= activeList.size() - 1) ? 0 : (currentActiveIndex + 1);
+    const QString targetPath = activeList[nextActiveIndex].filePath;
+    for (int i = 0; i < m_playlist.size(); ++i) {
+        if (m_playlist[i].filePath == targetPath) {
+            playByIndex(i);
+            return;
+        }
     }
 }
 
@@ -231,7 +233,10 @@ int PlayerController::playlistCount() const
 
 int PlayerController::activePlaylistCount() const
 {
-    if (m_playMode == PlayMode::FolderLoop) {
+    if (m_playMode == PlayMode::AllLoop) {
+        return m_playlist.size();
+    }
+    if (!m_folderPlaylist.isEmpty()) {
         return m_folderPlaylist.size();
     }
     return m_playlist.size();
@@ -380,13 +385,11 @@ void PlayerController::handleEndOfMedia()
         m_player->play();
         break;
     case PlayMode::FolderLoop:
-        next();
-        break;
     case PlayMode::AllLoop:
         next();
         break;
     case PlayMode::RandomPlay:
-        playByIndex(randomIndexExcludingCurrent());
+        next();
         break;
     }
 }

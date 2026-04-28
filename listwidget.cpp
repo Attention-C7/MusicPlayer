@@ -47,7 +47,7 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     });
 
     connect(ui->listWidget_files, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
-        if (m_currentTab == 0) {
+        if (m_currentTab == 0 || m_currentTab == 3) {
             handleItemClicked(item);
         } else {
             handleGroupItemClicked(item);
@@ -68,6 +68,10 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
         m_currentTab = 2;
         refreshGroupList(2);
     });
+    connect(ui->btn_tab_all, &QPushButton::clicked, this, [this]() {
+        m_currentTab = 3;
+        refreshAllSongsList();
+    });
 
     connect(m_controller, &PlayerController::songChanged, this, [this](const SongInfo &info) {
         m_currentPlayingFilePath = info.filePath;
@@ -80,11 +84,11 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
 
     connect(m_controller, &PlayerController::playModeChanged, this, [this](PlayMode mode) {
         if (mode == PlayMode::AllLoop) {
-            m_currentPath = m_rootPath;
-            m_dirStack.clear();
-            if (isVisible()) {
-                refreshList();
-            }
+            m_currentTab = 3;
+            refreshAllSongsList();
+        } else {
+            m_currentTab = 0;
+            refreshList();
         }
     });
 
@@ -141,6 +145,10 @@ void ListWidget::setRootPath(const QString &path)
 
 void ListWidget::refreshList()
 {
+    if (m_currentTab == 3) {
+        refreshAllSongsList();
+        return;
+    }
     if (m_currentTab != 0) {
         refreshGroupList(m_currentTab);
         return;
@@ -218,6 +226,10 @@ void ListWidget::updateCurrentPathLabel()
         ui->lbl_currentPath->setText(QStringLiteral("歌手"));
         return;
     }
+    if (m_currentTab == 3) {
+        ui->lbl_currentPath->setText(QStringLiteral("全部"));
+        return;
+    }
 
     if (m_currentPath.isEmpty() || m_rootPath.isEmpty()) {
         ui->lbl_currentPath->setText(QStringLiteral("/"));
@@ -278,11 +290,30 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
         return;
     }
 
+    if (m_currentTab == 3) {
+        m_controller->setPlaylist(m_allSongs);
+        m_controller->setFolderPlaylist(m_allSongs);
+
+        int targetIndex = -1;
+        for (int i = 0; i < m_allSongs.size(); ++i) {
+            if (m_allSongs[i].filePath == path) {
+                targetIndex = i;
+                break;
+            }
+        }
+        if (targetIndex >= 0) {
+            m_controller->playSong(targetIndex);
+        }
+        emit backToPlayerRequested();
+        return;
+    }
+
     if (!m_currentPlayingFilePath.isEmpty() && path == m_currentPlayingFilePath) {
         emit backToPlayerRequested();
         return;
     }
 
+    m_controller->setPlayMode(PlayMode::FolderLoop);
     m_controller->setFolderPlaylist(m_currentSongs);
     m_controller->setPlaylist(m_allSongs);
 
@@ -370,6 +401,38 @@ void ListWidget::refreshGroupList(int tab)
                 ui->listWidget_files->addItem(songItem);
             }
         }
+    }
+
+    updatePlayingHighlight();
+}
+
+void ListWidget::refreshAllSongsList()
+{
+    ui->listWidget_files->clear();
+
+    if (!m_scanReady) {
+        ui->listWidget_files->addItem(QStringLiteral("加载中..."));
+        return;
+    }
+
+    const int numberWidth = QString::number(m_allSongs.size()).size();
+    for (int i = 0; i < m_allSongs.size(); ++i) {
+        const SongInfo &song = m_allSongs[i];
+        QString title = song.title.trimmed();
+        if (title.isEmpty()) {
+            title = QFileInfo(song.filePath).completeBaseName();
+        }
+        const QString artist = song.artist.trimmed();
+        const QString displayText = QStringLiteral("%1  %2\n%3")
+                                        .arg(i + 1, numberWidth, 10, QChar(' '))
+                                        .arg(title)
+                                        .arg(artist);
+
+        auto *item = new QListWidgetItem(displayText);
+        item->setData(RoleItemType, FileItem);
+        item->setData(RolePath, song.filePath);
+        item->setSizeHint(QSize(0, 50));
+        ui->listWidget_files->addItem(item);
     }
 
     updatePlayingHighlight();
@@ -465,6 +528,8 @@ void ListWidget::onScanFinished(QList<SongInfo> songs)
     m_scanReady = true;
     if (m_currentTab == 0) {
         refreshList();
+    } else if (m_currentTab == 3) {
+        refreshAllSongsList();
     } else {
         refreshGroupList(m_currentTab);
     }

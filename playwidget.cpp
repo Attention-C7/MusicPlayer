@@ -270,7 +270,7 @@ void PlayWidget::setPlayModeIcon(PlayMode mode)
         ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/8shuffle.png")));
         return;
     }
-    ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/7repeatall.png")));
+    ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/6repeatlist.png")));
 }
 
 void PlayWidget::updateLrcDisplay(qint64 position)
