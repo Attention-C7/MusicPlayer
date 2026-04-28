@@ -18,6 +18,7 @@ public:
     explicit PlayerController(QObject *parent = nullptr);
 
     void setPlaylist(QList<SongInfo> songs);
+    void setFolderPlaylist(QList<SongInfo> songs);
     void playSong(int index);
     void playPause();
     void prev();
@@ -42,6 +43,7 @@ signals:
     void errorOccurred(QString message);
     void albumArtChanged(QPixmap pixmap);
     void lrcLoaded(QMap<qint64, QString> lyrics);
+    void playlistMetaUpdated(int index, SongInfo info);
 
 private:
     static constexpr int SeekIntervalMs = 100;
@@ -56,6 +58,7 @@ private:
     QMediaPlayer *m_player;
     QAudioOutput *m_audioOutput;
     QList<SongInfo> m_playlist;
+    QList<SongInfo> m_folderPlaylist;
     int m_currentIndex;
     PlayMode m_playMode;
     QTimer *m_seekTimer;

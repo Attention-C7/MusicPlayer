@@ -66,6 +66,11 @@ void PlayerController::setPlaylist(QList<SongInfo> songs)
     }
 }
 
+void PlayerController::setFolderPlaylist(QList<SongInfo> songs)
+{
+    m_folderPlaylist = songs;
+}
+
 void PlayerController::playSong(int index)
 {
     playByIndex(index);
@@ -100,10 +105,35 @@ void PlayerController::prev()
         return;
     }
 
-    if (m_currentIndex <= 0) {
-        playByIndex(m_playlist.size() - 1);
+    const QList<SongInfo> &activeList =
+        (m_playMode == PlayMode::FolderLoop && !m_folderPlaylist.isEmpty()) ? m_folderPlaylist : m_playlist;
+    if (activeList.isEmpty()) {
+        return;
+    }
+
+    QString currentFilePath;
+    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+        currentFilePath = m_playlist[m_currentIndex].filePath;
     } else {
-        playByIndex(m_currentIndex - 1);
+        currentFilePath = activeList.first().filePath;
+    }
+
+    int currentActiveIndex = 0;
+    for (int i = 0; i < activeList.size(); ++i) {
+        if (activeList[i].filePath == currentFilePath) {
+            currentActiveIndex = i;
+            break;
+        }
+    }
+
+    const int prevActiveIndex = (currentActiveIndex <= 0) ? (activeList.size() - 1) : (currentActiveIndex - 1);
+    const QString targetPath = activeList[prevActiveIndex].filePath;
+
+    for (int i = 0; i < m_playlist.size(); ++i) {
+        if (m_playlist[i].filePath == targetPath) {
+            playByIndex(i);
+            return;
+        }
     }
 }
 
@@ -118,10 +148,36 @@ void PlayerController::next()
         return;
     }
 
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size() - 1) {
-        playByIndex(0);
+    const QList<SongInfo> &activeList =
+        (m_playMode == PlayMode::FolderLoop && !m_folderPlaylist.isEmpty()) ? m_folderPlaylist : m_playlist;
+    if (activeList.isEmpty()) {
+        return;
+    }
+
+    QString currentFilePath;
+    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+        currentFilePath = m_playlist[m_currentIndex].filePath;
     } else {
-        playByIndex(m_currentIndex + 1);
+        currentFilePath = activeList.first().filePath;
+    }
+
+    int currentActiveIndex = -1;
+    for (int i = 0; i < activeList.size(); ++i) {
+        if (activeList[i].filePath == currentFilePath) {
+            currentActiveIndex = i;
+            break;
+        }
+    }
+
+    const int nextActiveIndex =
+        (currentActiveIndex < 0 || currentActiveIndex >= activeList.size() - 1) ? 0 : (currentActiveIndex + 1);
+    const QString targetPath = activeList[nextActiveIndex].filePath;
+
+    for (int i = 0; i < m_playlist.size(); ++i) {
+        if (m_playlist[i].filePath == targetPath) {
+            playByIndex(i);
+            return;
+        }
     }
 }
 
@@ -266,6 +322,7 @@ void PlayerController::updateSongMetaData()
 
     emit albumArtChanged(albumArt);
     emit songChanged(song);
+    emit playlistMetaUpdated(m_currentIndex, song);
 }
 
 int PlayerController::randomIndexExcludingCurrent() const
@@ -296,6 +353,8 @@ void PlayerController::handleEndOfMedia()
         m_player->play();
         break;
     case PlayMode::FolderLoop:
+        next();
+        break;
     case PlayMode::AllLoop:
         next();
         break;

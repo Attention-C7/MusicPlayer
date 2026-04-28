@@ -32,11 +32,16 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     updateCurrentPathLabel();
 
     connect(ui->btn_back, &QPushButton::clicked, this, [this]() {
-        if (!m_dirStack.isEmpty()) {
-            m_currentPath = m_dirStack.pop();
-            refreshList();
+        if (m_currentTab == 0) {
+            if (!m_dirStack.isEmpty()) {
+                m_currentPath = m_dirStack.pop();
+                refreshList();
+            } else {
+                ui->lbl_currentPath->setText(QStringLiteral("已在根目录"));
+            }
             return;
         }
+
         emit backToPlayerRequested();
     });
 
@@ -49,8 +54,9 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     });
 
     connect(ui->btn_tab_dir, &QPushButton::clicked, this, [this]() {
+        m_currentPath = m_rootPath;
+        m_dirStack.clear();
         m_currentTab = 0;
-        m_expandedGroup.clear();
         refreshList();
     });
     connect(ui->btn_tab_album, &QPushButton::clicked, this, [this]() {
@@ -69,6 +75,31 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
 
     connect(m_controller, &PlayerController::currentIndexChanged, this, [this](int) {
         updatePlayingHighlight();
+    });
+
+    connect(m_controller, &PlayerController::playlistMetaUpdated, this, [this](int index, const SongInfo &info) {
+        bool updated = false;
+        if (index >= 0 && index < m_allSongs.size() && m_allSongs[index].filePath == info.filePath) {
+            m_allSongs[index] = info;
+            updated = true;
+        } else {
+            for (int i = 0; i < m_allSongs.size(); ++i) {
+                if (m_allSongs[i].filePath == info.filePath) {
+                    m_allSongs[i] = info;
+                    updated = true;
+                    break;
+                }
+            }
+        }
+
+        if (!updated) {
+            return;
+        }
+
+        buildGroupMaps();
+        if (m_currentTab == 1 || m_currentTab == 2) {
+            refreshGroupList(m_currentTab);
+        }
     });
 }
 
@@ -168,11 +199,37 @@ void ListWidget::refreshList()
 
 void ListWidget::updateCurrentPathLabel()
 {
-    if (m_currentPath.isEmpty()) {
-        ui->lbl_currentPath->setText(QStringLiteral("-"));
+    if (m_currentTab == 1) {
+        ui->lbl_currentPath->setText(QStringLiteral("专辑"));
         return;
     }
-    ui->lbl_currentPath->setText(m_currentPath);
+    if (m_currentTab == 2) {
+        ui->lbl_currentPath->setText(QStringLiteral("歌手"));
+        return;
+    }
+
+    if (m_currentPath.isEmpty() || m_rootPath.isEmpty()) {
+        ui->lbl_currentPath->setText(QStringLiteral("/"));
+        return;
+    }
+
+    const QString cleanRoot = QDir::cleanPath(m_rootPath);
+    const QString cleanCurrent = QDir::cleanPath(m_currentPath);
+    if (cleanCurrent == cleanRoot) {
+        ui->lbl_currentPath->setText(QStringLiteral("/"));
+        return;
+    }
+
+    QString relative = cleanCurrent;
+    if (relative.startsWith(cleanRoot)) {
+        relative = relative.mid(cleanRoot.size());
+    }
+    if (relative.isEmpty()) {
+        relative = QStringLiteral("/");
+    } else if (!relative.startsWith('/')) {
+        relative.prepend('/');
+    }
+    ui->lbl_currentPath->setText(relative);
 }
 
 void ListWidget::updatePlayingHighlight()
@@ -215,11 +272,12 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
         return;
     }
 
-    m_controller->setPlaylist(m_currentSongs);
+    m_controller->setPlaylist(m_allSongs);
+    m_controller->setFolderPlaylist(m_currentSongs);
 
     int targetIndex = -1;
-    for (int i = 0; i < m_currentSongs.size(); ++i) {
-        if (m_currentSongs[i].filePath == path) {
+    for (int i = 0; i < m_allSongs.size(); ++i) {
+        if (m_allSongs[i].filePath == path) {
             targetIndex = i;
             break;
         }

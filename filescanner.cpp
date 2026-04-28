@@ -42,6 +42,22 @@ QList<SongInfo> FileScanner::scanFiles(const QString &dirPath)
         const QString baseName = fileInfo.completeBaseName();
         song.title = baseName;
         song.artist = QString();
+
+        int sepPos = baseName.indexOf(QStringLiteral(" - "));
+        int sepLen = 3;
+        if (sepPos < 0) {
+            sepPos = baseName.indexOf(QLatin1Char('-'));
+            sepLen = 1;
+        }
+        if (sepPos > 0 && sepPos < baseName.size() - sepLen) {
+            const QString artist = baseName.left(sepPos).trimmed();
+            const QString title = baseName.mid(sepPos + sepLen).trimmed();
+            if (!artist.isEmpty() && !title.isEmpty()) {
+                song.artist = artist;
+                song.title = title;
+            }
+        }
+
         song.album = QString();
         song.duration = 0;
 
