@@ -33,6 +33,31 @@
     </layout>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_tabs">
+     <item>
+      <widget class="QPushButton" name="btn_tab_dir">
+       <property name="text">
+        <string>📁 目录</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_tab_album">
+       <property name="text">
+        <string>💿 专辑</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_tab_artist">
+       <property name="text">
+        <string>🎤 歌手</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <widget class="QListWidget" name="listWidget_files">
      <property name="uniformItemSizes">
       <bool>false</bool>

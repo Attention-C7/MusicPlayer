@@ -13,6 +13,7 @@ namespace
 {
 constexpr int RoleItemType = Qt::UserRole;
 constexpr int RolePath = Qt::UserRole + 1;
+constexpr int RoleGroupName = Qt::UserRole + 2;
 }
 
 ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
@@ -22,6 +23,7 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     , m_scanThread(new QThread(this))
     , m_worker(nullptr)
     , m_scanReady(false)
+    , m_currentTab(0)
 {
     ui->setupUi(this);
     setWindowFlags(Qt::FramelessWindowHint);
@@ -38,7 +40,27 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
         emit backToPlayerRequested();
     });
 
-    connect(ui->listWidget_files, &QListWidget::itemClicked, this, &ListWidget::handleItemClicked);
+    connect(ui->listWidget_files, &QListWidget::itemClicked, this, [this](QListWidgetItem *item) {
+        if (m_currentTab == 0) {
+            handleItemClicked(item);
+        } else {
+            handleGroupItemClicked(item);
+        }
+    });
+
+    connect(ui->btn_tab_dir, &QPushButton::clicked, this, [this]() {
+        m_currentTab = 0;
+        m_expandedGroup.clear();
+        refreshList();
+    });
+    connect(ui->btn_tab_album, &QPushButton::clicked, this, [this]() {
+        m_currentTab = 1;
+        refreshGroupList(1);
+    });
+    connect(ui->btn_tab_artist, &QPushButton::clicked, this, [this]() {
+        m_currentTab = 2;
+        refreshGroupList(2);
+    });
 
     connect(m_controller, &PlayerController::songChanged, this, [this](const SongInfo &info) {
         m_currentPlayingFilePath = info.filePath;
@@ -77,6 +99,11 @@ void ListWidget::setRootPath(const QString &path)
 
 void ListWidget::refreshList()
 {
+    if (m_currentTab != 0) {
+        refreshGroupList(m_currentTab);
+        return;
+    }
+
     if (m_currentPath.isEmpty()) {
         m_currentPath = m_rootPath;
     }
@@ -205,6 +232,123 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
     emit backToPlayerRequested();
 }
 
+void ListWidget::buildGroupMaps()
+{
+    m_albumMap.clear();
+    m_artistMap.clear();
+
+    for (const SongInfo &song : m_allSongs) {
+        QString album = song.album.trimmed();
+        if (album.isEmpty()) {
+            album = QStringLiteral("未知专辑");
+        }
+        QString artist = song.artist.trimmed();
+        if (artist.isEmpty()) {
+            artist = QStringLiteral("未知歌手");
+        }
+
+        m_albumMap[album].append(song);
+        m_artistMap[artist].append(song);
+    }
+}
+
+void ListWidget::refreshGroupList(int tab)
+{
+    ui->listWidget_files->clear();
+
+    if (!m_scanReady) {
+        ui->listWidget_files->addItem(QStringLiteral("加载中..."));
+        return;
+    }
+
+    const QMap<QString, QList<SongInfo>> &groupMap = (tab == 1) ? m_albumMap : m_artistMap;
+
+    for (auto it = groupMap.cbegin(); it != groupMap.cend(); ++it) {
+        const QString groupName = it.key();
+        const QList<SongInfo> &songs = it.value();
+
+        auto *groupItem = new QListWidgetItem(QStringLiteral("%1 (%2)").arg(groupName).arg(songs.size()));
+        groupItem->setData(RoleItemType, GroupItem);
+        groupItem->setData(RoleGroupName, groupName);
+        groupItem->setSizeHint(QSize(0, 42));
+        ui->listWidget_files->addItem(groupItem);
+
+        if (m_expandedGroup == groupName) {
+            const int numberWidth = QString::number(songs.size()).size();
+            for (int i = 0; i < songs.size(); ++i) {
+                const SongInfo &song = songs[i];
+                QString title = song.title.trimmed();
+                if (title.isEmpty()) {
+                    title = QFileInfo(song.filePath).completeBaseName();
+                }
+                const QString artist = song.artist.trimmed();
+                const QString displayText = QStringLiteral("    %1  %2\n    %3")
+                                                .arg(i + 1, numberWidth, 10, QChar(' '))
+                                                .arg(title)
+                                                .arg(artist);
+
+                auto *songItem = new QListWidgetItem(displayText);
+                songItem->setData(RoleItemType, FileItem);
+                songItem->setData(RolePath, song.filePath);
+                songItem->setData(RoleGroupName, groupName);
+                songItem->setSizeHint(QSize(0, 50));
+                ui->listWidget_files->addItem(songItem);
+            }
+        }
+    }
+
+    updatePlayingHighlight();
+}
+
+void ListWidget::handleGroupItemClicked(QListWidgetItem *item)
+{
+    if (item == nullptr) {
+        return;
+    }
+
+    const int type = item->data(RoleItemType).toInt();
+    const QString groupName = item->data(RoleGroupName).toString();
+
+    if (type == GroupItem) {
+        if (m_expandedGroup == groupName) {
+            m_expandedGroup.clear();
+        } else {
+            m_expandedGroup = groupName;
+        }
+        refreshGroupList(m_currentTab);
+        return;
+    }
+
+    if (type != FileItem) {
+        return;
+    }
+
+    const QString filePath = item->data(RolePath).toString();
+    const QMap<QString, QList<SongInfo>> &groupMap = (m_currentTab == 1) ? m_albumMap : m_artistMap;
+    const QList<SongInfo> groupSongs = groupMap.value(groupName);
+    if (groupSongs.isEmpty()) {
+        return;
+    }
+
+    if (!m_currentPlayingFilePath.isEmpty() && m_currentPlayingFilePath == filePath) {
+        emit backToPlayerRequested();
+        return;
+    }
+
+    m_controller->setPlaylist(groupSongs);
+    int targetIndex = -1;
+    for (int i = 0; i < groupSongs.size(); ++i) {
+        if (groupSongs[i].filePath == filePath) {
+            targetIndex = i;
+            break;
+        }
+    }
+    if (targetIndex >= 0) {
+        m_controller->playSong(targetIndex);
+    }
+    emit backToPlayerRequested();
+}
+
 void ListWidget::startBackgroundScan()
 {
     if (m_scanThread->isRunning()) {
@@ -242,8 +386,13 @@ void ListWidget::startBackgroundScan()
 void ListWidget::onScanFinished(QList<SongInfo> songs)
 {
     m_allSongs = songs;
+    buildGroupMaps();
     m_scanReady = true;
-    refreshList();
+    if (m_currentTab == 0) {
+        refreshList();
+    } else {
+        refreshGroupList(m_currentTab);
+    }
 }
 
 void ListWidget::paintEvent(QPaintEvent *event)

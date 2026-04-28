@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QMap>
 #include <QStack>
 #include <QString>
 #include <QThread>
@@ -39,12 +40,16 @@ private:
     enum ItemType
     {
         FolderItem = 1,
-        FileItem = 2
+        FileItem = 2,
+        GroupItem = 3
     };
 
     void updateCurrentPathLabel();
     void updatePlayingHighlight();
     void handleItemClicked(QListWidgetItem *item);
+    void buildGroupMaps();
+    void refreshGroupList(int tab);
+    void handleGroupItemClicked(QListWidgetItem *item);
     void startBackgroundScan();
     void onScanFinished(QList<SongInfo> songs);
 
@@ -57,6 +62,10 @@ private:
     QStack<QString> m_dirStack;
     QString m_currentPath;
     QList<SongInfo> m_allSongs;
+    QMap<QString, QList<SongInfo>> m_albumMap;
+    QMap<QString, QList<SongInfo>> m_artistMap;
+    int m_currentTab;
+    QString m_expandedGroup;
     QStringList m_subDirs;
     QList<SongInfo> m_currentSongs;
     QString m_currentPlayingFilePath;
