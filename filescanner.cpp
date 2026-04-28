@@ -5,6 +5,9 @@
 #include <QFileInfo>
 #include <QFileInfoList>
 
+#include <taglib/fileref.h>
+#include <taglib/tag.h>
+
 namespace
 {
 QStringList audioNameFilters()
@@ -59,6 +62,25 @@ QList<SongInfo> FileScanner::scanFiles(const QString &dirPath)
         }
 
         song.album = QString();
+
+        TagLib::FileRef f(song.filePath.toLocal8Bit().constData());
+        if (!f.isNull() && f.tag() != nullptr) {
+            TagLib::Tag *tag = f.tag();
+            const QString tagTitle = QString::fromUtf8(tag->title().toCString(true)).trimmed();
+            const QString tagArtist = QString::fromUtf8(tag->artist().toCString(true)).trimmed();
+            const QString tagAlbum = QString::fromUtf8(tag->album().toCString(true)).trimmed();
+
+            if (!tagTitle.isEmpty()) {
+                song.title = tagTitle;
+            }
+            if (!tagArtist.isEmpty()) {
+                song.artist = tagArtist;
+            }
+            if (!tagAlbum.isEmpty()) {
+                song.album = tagAlbum;
+            }
+        }
+
         song.duration = 0;
 
         songs.append(song);
