@@ -28,6 +28,8 @@ set(PROJECT_SOURCES
         listwidget.cpp
         listwidget.h
         listwidget.ui
+        lrcparser.cpp
+        lrcparser.h
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)

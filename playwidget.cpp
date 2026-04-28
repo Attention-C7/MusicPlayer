@@ -5,11 +5,14 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
+#include <QScrollBar>
+#include <QVBoxLayout>
 
 PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::PlayWidget)
     , m_bgLabel(nullptr)
+    , m_currentLrcIndex(-1)
     , m_controller(controller)
     , m_isDragging(false)
     , m_longPressTimer(new QTimer(this))
@@ -49,6 +52,8 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->lbl_index->setStyleSheet(QStringLiteral("background:transparent;"));
     ui->lbl_currentTime->setStyleSheet(QStringLiteral("background:transparent;"));
     ui->lbl_totalTime->setStyleSheet(QStringLiteral("background:transparent;"));
+    ui->scrollArea_lrc->setStyleSheet(QStringLiteral("background:transparent;"));
+    ui->scrollAreaWidgetContents_lrc->setStyleSheet(QStringLiteral("background:transparent;"));
 
     connect(m_controller, &PlayerController::songChanged, this, [this](SongInfo info) {
         QString title = info.title.trimmed();
@@ -76,6 +81,7 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     });
 
     connect(m_controller, &PlayerController::positionChanged, this, [this](qint64 position) {
+        updateLrcDisplay(position);
         if (m_isDragging) {
             return;
         }
@@ -119,6 +125,15 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
         updateBackground(pixmap);
         ui->lbl_albumArt->setText(QString());
         ui->lbl_albumArt->setPixmap(roundedAlbumArt(pixmap));
+    });
+
+    connect(m_controller, &PlayerController::lrcLoaded, this, [this](const QMap<qint64, QString> &lyrics) {
+        m_lrcMap = lyrics;
+        m_currentLrcIndex = -1;
+        clearLrcLabels();
+        if (!m_lrcMap.isEmpty()) {
+            buildLrcLabels();
+        }
     });
 
     connect(ui->btn_playPause, &QPushButton::clicked, this, [this]() {
@@ -246,6 +261,77 @@ QString PlayWidget::playModeText(PlayMode mode) const
         return QStringLiteral("🔀");
     }
     return QStringLiteral("🔁");
+}
+
+void PlayWidget::updateLrcDisplay(qint64 position)
+{
+    if (m_lrcMap.isEmpty() || m_lrcLabels.isEmpty()) {
+        return;
+    }
+
+    const QList<qint64> keys = m_lrcMap.keys();
+    int targetIndex = -1;
+    for (int i = 0; i < keys.size(); ++i) {
+        if (keys[i] <= position) {
+            targetIndex = i;
+        } else {
+            break;
+        }
+    }
+
+    if (targetIndex < 0 || targetIndex >= m_lrcLabels.size()) {
+        return;
+    }
+    if (targetIndex == m_currentLrcIndex) {
+        return;
+    }
+
+    if (m_currentLrcIndex >= 0 && m_currentLrcIndex < m_lrcLabels.size()) {
+        m_lrcLabels[m_currentLrcIndex]->setStyleSheet(
+            QStringLiteral("color:#888888; font-size:13px; font-weight:normal; background:transparent;")
+        );
+    }
+
+    m_currentLrcIndex = targetIndex;
+    QLabel *current = m_lrcLabels[m_currentLrcIndex];
+    current->setStyleSheet(
+        QStringLiteral("color:#ffffff; font-size:15px; font-weight:bold; background:transparent;")
+    );
+
+    const int centerY = current->y() + (current->height() / 2);
+    const int viewportHalf = ui->scrollArea_lrc->viewport()->height() / 2;
+    ui->scrollArea_lrc->verticalScrollBar()->setValue(centerY - viewportHalf);
+}
+
+void PlayWidget::buildLrcLabels()
+{
+    QVBoxLayout *layout = ui->verticalLayout_lrc;
+    const QList<qint64> keys = m_lrcMap.keys();
+    for (qint64 key : keys) {
+        QLabel *label = new QLabel(m_lrcMap.value(key), ui->scrollAreaWidgetContents_lrc);
+        label->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
+        label->setWordWrap(true);
+        label->setStyleSheet(QStringLiteral("color:#888888; font-size:13px; font-weight:normal; background:transparent;"));
+        layout->addWidget(label);
+        m_lrcLabels.append(label);
+    }
+    layout->addStretch();
+}
+
+void PlayWidget::clearLrcLabels()
+{
+    QVBoxLayout *layout = ui->verticalLayout_lrc;
+    while (layout->count() > 0) {
+        QLayoutItem *item = layout->takeAt(0);
+        if (item != nullptr) {
+            if (item->widget() != nullptr) {
+                item->widget()->deleteLater();
+            }
+            delete item;
+        }
+    }
+    m_lrcLabels.clear();
+    m_currentLrcIndex = -1;
 }
 
 QPixmap PlayWidget::roundedAlbumArt(const QPixmap &pixmap) const
