@@ -362,7 +362,37 @@ void PlayWidget::updateBackground(const QPixmap &pixmap)
     }
 
     const QSize bgSize(800, 500);
-    m_bgPixmap = pixmap.scaled(bgSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    const QPixmap cover = pixmap.scaled(bgSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+
+    QPixmap canvas(bgSize);
+    canvas.fill(Qt::black);
+
+    QPainter painter(&canvas);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+
+    const int coverSize = cover.height();
+    const int coverX = 0;
+    const int coverY = (bgSize.height() - coverSize) / 2;
+    painter.drawPixmap(QRect(coverX, coverY, coverSize, coverSize), cover);
+
+    const int rightStart = coverSize;
+    if (rightStart < bgSize.width()) {
+        const QImage coverImg = cover.toImage();
+        const QColor edgeColor = coverImg.pixelColor(coverImg.width() - 1, coverImg.height() / 2);
+        QColor darkColor = edgeColor.darker(220);
+        darkColor.setAlpha(255);
+
+        QLinearGradient gradient(rightStart, 0, bgSize.width(), 0);
+        gradient.setColorAt(0.0, edgeColor);
+        gradient.setColorAt(1.0, darkColor);
+        painter.fillRect(QRect(rightStart, 0, bgSize.width() - rightStart, bgSize.height()), gradient);
+    }
+
+    painter.fillRect(QRect(0, 0, bgSize.width(), bgSize.height()), QColor(10, 10, 20, 160));
+    painter.end();
+
+    m_bgPixmap = canvas;
     update();
 }
 
@@ -384,7 +414,7 @@ void PlayWidget::paintEvent(QPaintEvent *event)
 void PlayWidget::updateIndexLabel()
 {
     const int index = m_controller->currentIndex();
-    const int total = m_controller->playlistCount();
+    const int total = m_controller->activePlaylistCount();
 
     const int displayIndex = (index >= 0) ? (index + 1) : 0;
     ui->lbl_index->setText(QStringLiteral("%1/%2").arg(displayIndex).arg(total));

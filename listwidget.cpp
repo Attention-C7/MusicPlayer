@@ -7,6 +7,7 @@
 #include <QListWidgetItem>
 #include <QPainter>
 #include <QPaintEvent>
+#include <QSet>
 #include <QVariant>
 
 namespace
@@ -75,6 +76,16 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
 
     connect(m_controller, &PlayerController::currentIndexChanged, this, [this](int) {
         updatePlayingHighlight();
+    });
+
+    connect(m_controller, &PlayerController::playModeChanged, this, [this](PlayMode mode) {
+        if (mode == PlayMode::AllLoop) {
+            m_currentPath = m_rootPath;
+            m_dirStack.clear();
+            if (isVisible()) {
+                refreshList();
+            }
+        }
     });
 
     connect(m_controller, &PlayerController::playlistMetaUpdated, this, [this](int index, const SongInfo &info) {
@@ -294,8 +305,14 @@ void ListWidget::buildGroupMaps()
 {
     m_albumMap.clear();
     m_artistMap.clear();
+    QSet<QString> visitedPaths;
 
     for (const SongInfo &song : m_allSongs) {
+        if (visitedPaths.contains(song.filePath)) {
+            continue;
+        }
+        visitedPaths.insert(song.filePath);
+
         QString album = song.album.trimmed();
         if (album.isEmpty()) {
             album = QStringLiteral("未知专辑");

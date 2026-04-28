@@ -210,6 +210,14 @@ int PlayerController::playlistCount() const
     return m_playlist.size();
 }
 
+int PlayerController::activePlaylistCount() const
+{
+    if (m_playMode == PlayMode::FolderLoop) {
+        return m_folderPlaylist.size();
+    }
+    return m_playlist.size();
+}
+
 PlayMode PlayerController::playMode() const
 {
     return m_playMode;

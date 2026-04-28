@@ -27,6 +27,7 @@ public:
     void setPlayMode(PlayMode mode);
     int currentIndex() const;
     int playlistCount() const;
+    int activePlaylistCount() const;
     PlayMode playMode() const;
     void startSeekForward();
     void stopSeekForward();
