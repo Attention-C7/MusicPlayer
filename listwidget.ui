@@ -37,21 +37,21 @@
      <item>
       <widget class="QPushButton" name="btn_tab_dir">
        <property name="text">
-        <string>📁 目录</string>
+        <string>目录</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btn_tab_album">
        <property name="text">
-        <string>💿 专辑</string>
+        <string>专辑</string>
        </property>
       </widget>
      </item>
      <item>
       <widget class="QPushButton" name="btn_tab_artist">
        <property name="text">
-        <string>🎤 歌手</string>
+        <string>歌手</string>
        </property>
       </widget>
      </item>
