@@ -1,6 +1,5 @@
 #pragma once
 
-#include <QGraphicsBlurEffect>
 #include <QLabel>
 #include <QMap>
 #include <QPixmap>
@@ -28,6 +27,7 @@ signals:
     void showListRequested();
 
 private:
+    void paintEvent(QPaintEvent *event) override;
     QString formatTime(qint64 ms) const;
     QString playModeText(PlayMode mode) const;
     QPixmap roundedAlbumArt(const QPixmap &pixmap) const;
@@ -38,7 +38,7 @@ private:
     void updateIndexLabel();
 
     Ui::PlayWidget *ui;
-    QLabel *m_bgLabel;
+    QPixmap m_bgPixmap;
     QMap<qint64, QString> m_lrcMap;
     int m_currentLrcIndex;
     QList<QLabel*> m_lrcLabels;

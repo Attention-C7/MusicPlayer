@@ -11,7 +11,6 @@
 PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::PlayWidget)
-    , m_bgLabel(nullptr)
     , m_currentLrcIndex(-1)
     , m_controller(controller)
     , m_isDragging(false)
@@ -22,15 +21,6 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->setupUi(this);
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(false);
-
-    m_bgLabel = new QLabel(this);
-    m_bgLabel->setGeometry(0, 0, 800, 500);
-    m_bgLabel->setScaledContents(true);
-    auto *blurEffect = new QGraphicsBlurEffect(m_bgLabel);
-    blurEffect->setBlurRadius(40.0);
-    m_bgLabel->setGraphicsEffect(blurEffect);
-    m_bgLabel->lower();
-    m_bgLabel->hide();
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
@@ -118,7 +108,8 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
         if (pixmap.isNull()) {
             ui->lbl_albumArt->setPixmap(QPixmap());
             ui->lbl_albumArt->setText(QStringLiteral("♪"));
-            m_bgLabel->hide();
+            m_bgPixmap = QPixmap();
+            update();
             return;
         }
 
@@ -365,22 +356,29 @@ QPixmap PlayWidget::roundedAlbumArt(const QPixmap &pixmap) const
 void PlayWidget::updateBackground(const QPixmap &pixmap)
 {
     if (pixmap.isNull()) {
-        m_bgLabel->hide();
+        m_bgPixmap = QPixmap();
+        update();
         return;
     }
 
     const QSize bgSize(800, 500);
-    QPixmap scaled = pixmap.scaled(bgSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    m_bgPixmap = pixmap.scaled(bgSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+    update();
+}
 
-    QPainter painter(&scaled);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.fillRect(QRect(0, 0, bgSize.width(), bgSize.height()), QColor(10, 10, 20, 200));
-    painter.end();
+void PlayWidget::paintEvent(QPaintEvent *event)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
 
-    m_bgLabel->setScaledContents(true);
-    m_bgLabel->setPixmap(scaled);
-    m_bgLabel->show();
-    m_bgLabel->lower();
+    if (!m_bgPixmap.isNull()) {
+        painter.drawPixmap(rect(), m_bgPixmap);
+        painter.fillRect(rect(), QColor(10, 10, 20, 180));
+    } else {
+        painter.fillRect(rect(), QColor("#1a1a2e"));
+    }
+
+    QWidget::paintEvent(event);
 }
 
 void PlayWidget::updateIndexLabel()
