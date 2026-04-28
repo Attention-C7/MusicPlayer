@@ -19,6 +19,9 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::ListWidget)
     , m_controller(controller)
+    , m_scanThread(new QThread(this))
+    , m_worker(nullptr)
+    , m_scanReady(false)
 {
     ui->setupUi(this);
     setWindowFlags(Qt::FramelessWindowHint);
@@ -49,6 +52,13 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
 
 ListWidget::~ListWidget()
 {
+    if (m_worker != nullptr) {
+        m_worker->cancel();
+    }
+    if (m_scanThread != nullptr) {
+        m_scanThread->quit();
+        m_scanThread->wait();
+    }
     delete ui;
 }
 
@@ -62,7 +72,7 @@ void ListWidget::setRootPath(const QString &path)
     m_rootPath = QDir::cleanPath(dir.absolutePath());
     m_currentPath = m_rootPath;
     m_dirStack.clear();
-    refreshList();
+    startBackgroundScan();
 }
 
 void ListWidget::refreshList()
@@ -76,8 +86,22 @@ void ListWidget::refreshList()
         return;
     }
 
+    if (!m_scanReady) {
+        ui->listWidget_files->clear();
+        ui->listWidget_files->addItem(QStringLiteral("加载中..."));
+        updateCurrentPathLabel();
+        return;
+    }
+
     m_subDirs = FileScanner::scanSubDirs(m_currentPath);
-    m_currentSongs = FileScanner::scanFiles(m_currentPath);
+    m_currentSongs.clear();
+    const QString currentDir = QDir::cleanPath(QDir(m_currentPath).absolutePath());
+    for (const SongInfo &song : m_allSongs) {
+        const QString parentDir = QFileInfo(song.filePath).dir().absolutePath();
+        if (QDir::cleanPath(parentDir) == currentDir) {
+            m_currentSongs.append(song);
+        }
+    }
 
     ui->listWidget_files->clear();
 
@@ -179,6 +203,47 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
     }
 
     emit backToPlayerRequested();
+}
+
+void ListWidget::startBackgroundScan()
+{
+    if (m_scanThread->isRunning()) {
+        if (m_worker != nullptr) {
+            m_worker->cancel();
+        }
+        m_scanThread->quit();
+        m_scanThread->wait();
+    }
+
+    m_scanReady = false;
+    m_allSongs.clear();
+    ui->listWidget_files->clear();
+    ui->listWidget_files->addItem(QStringLiteral("加载中..."));
+    updateCurrentPathLabel();
+
+    m_worker = new FileScanWorker();
+    m_worker->moveToThread(m_scanThread);
+    connect(this, &ListWidget::requestScan, m_worker, &FileScanWorker::startScan);
+    connect(m_worker, &FileScanWorker::scanFinished, this, &ListWidget::onScanFinished);
+    connect(m_worker, &FileScanWorker::scanFinished, m_scanThread, &QThread::quit);
+    connect(m_scanThread, &QThread::finished, m_worker, &QObject::deleteLater);
+    connect(m_scanThread, &QThread::finished, this, [this]() {
+        m_worker = nullptr;
+    });
+    connect(m_worker, &FileScanWorker::scanError, this, [this](const QString &message) {
+        ui->listWidget_files->clear();
+        ui->listWidget_files->addItem(message);
+    });
+
+    m_scanThread->start();
+    emit requestScan(m_rootPath);
+}
+
+void ListWidget::onScanFinished(QList<SongInfo> songs)
+{
+    m_allSongs = songs;
+    m_scanReady = true;
+    refreshList();
 }
 
 void ListWidget::paintEvent(QPaintEvent *event)

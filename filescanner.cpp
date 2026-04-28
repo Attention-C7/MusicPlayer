@@ -1,6 +1,7 @@
 #include "filescanner.h"
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFileInfo>
 #include <QFileInfoList>
 
@@ -48,6 +49,31 @@ QList<SongInfo> FileScanner::scanFiles(const QString &dirPath)
     }
 
     return songs;
+}
+
+QList<SongInfo> FileScanner::scanAllFiles(const QString &rootPath)
+{
+    QList<SongInfo> allSongs;
+
+    const QDir rootDir(rootPath);
+    if (!rootDir.exists()) {
+        return allSongs;
+    }
+
+    allSongs.append(scanFiles(rootDir.absolutePath()));
+
+    QDirIterator it(
+        rootDir.absolutePath(),
+        QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable,
+        QDirIterator::Subdirectories
+    );
+
+    while (it.hasNext()) {
+        const QString dirPath = it.next();
+        allSongs.append(scanFiles(dirPath));
+    }
+
+    return allSongs;
 }
 
 QStringList FileScanner::scanSubDirs(const QString &dirPath)

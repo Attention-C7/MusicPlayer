@@ -11,6 +11,7 @@ class FileScanner : public QObject
 {
 public:
     static QList<SongInfo> scanFiles(const QString &dirPath);
+    static QList<SongInfo> scanAllFiles(const QString &rootPath);
     static QStringList scanSubDirs(const QString &dirPath);
 
 private:

@@ -3,8 +3,10 @@
 #include <QList>
 #include <QStack>
 #include <QString>
+#include <QThread>
 #include <QWidget>
 
+#include "filescanworker.h"
 #include "filescanner.h"
 #include "playercontroller.h"
 
@@ -29,6 +31,7 @@ public:
 
 signals:
     void backToPlayerRequested();
+    void requestScan(QString rootPath);
 
 private:
     void paintEvent(QPaintEvent *event) override;
@@ -42,12 +45,18 @@ private:
     void updateCurrentPathLabel();
     void updatePlayingHighlight();
     void handleItemClicked(QListWidgetItem *item);
+    void startBackgroundScan();
+    void onScanFinished(QList<SongInfo> songs);
 
     Ui::ListWidget *ui;
     PlayerController *m_controller;
+    QThread *m_scanThread;
+    FileScanWorker *m_worker;
+    bool m_scanReady;
     QString m_rootPath;
     QStack<QString> m_dirStack;
     QString m_currentPath;
+    QList<SongInfo> m_allSongs;
     QStringList m_subDirs;
     QList<SongInfo> m_currentSongs;
     QString m_currentPlayingFilePath;
