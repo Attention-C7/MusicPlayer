@@ -30,6 +30,12 @@ QList<SongInfo> FileScanner::scanFiles(const QString &dirPath)
     for (const QFileInfo &fileInfo : fileList) {
         SongInfo song;
         song.filePath = fileInfo.absoluteFilePath();
+        song.lrcPath = QString();
+
+        const QString lrcFilePath = fileInfo.dir().absoluteFilePath(fileInfo.completeBaseName() + QStringLiteral(".lrc"));
+        if (QFileInfo::exists(lrcFilePath)) {
+            song.lrcPath = lrcFilePath;
+        }
 
         // ID3 metadata will be parsed in PlayerController.
         const QString baseName = fileInfo.completeBaseName();

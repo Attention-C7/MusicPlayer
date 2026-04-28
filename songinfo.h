@@ -6,6 +6,7 @@
 struct SongInfo
 {
     QString filePath; // Full file path
+    QString lrcPath;  // Full .lrc lyric file path
     QString title;    // Song title (ID3)
     QString artist;   // Artist (ID3)
     QString album;    // Album (ID3)
