@@ -71,6 +71,11 @@ void PlayerController::setFolderPlaylist(QList<SongInfo> songs)
     m_folderPlaylist = songs;
 }
 
+void PlayerController::setGroupPlaylist(QList<SongInfo> songs)
+{
+    m_groupPlaylist = songs;
+}
+
 void PlayerController::playSong(int index)
 {
     playByIndex(index);
@@ -100,8 +105,11 @@ void PlayerController::prev()
         return;
     }
 
-    const QList<SongInfo> &activeList =
-        (m_playMode == PlayMode::AllLoop || m_folderPlaylist.isEmpty()) ? m_playlist : m_folderPlaylist;
+    const QList<SongInfo> &activeList = (m_playMode == PlayMode::AllLoop)
+                                            ? m_playlist
+                                            : (!m_groupPlaylist.isEmpty() ? m_groupPlaylist
+                                                                          : (!m_folderPlaylist.isEmpty() ? m_folderPlaylist
+                                                                                                         : m_playlist));
     if (activeList.isEmpty()) {
         return;
     }
@@ -155,8 +163,11 @@ void PlayerController::next()
         return;
     }
 
-    const QList<SongInfo> &activeList =
-        (m_playMode == PlayMode::AllLoop || m_folderPlaylist.isEmpty()) ? m_playlist : m_folderPlaylist;
+    const QList<SongInfo> &activeList = (m_playMode == PlayMode::AllLoop)
+                                            ? m_playlist
+                                            : (!m_groupPlaylist.isEmpty() ? m_groupPlaylist
+                                                                          : (!m_folderPlaylist.isEmpty() ? m_folderPlaylist
+                                                                                                         : m_playlist));
     if (activeList.isEmpty()) {
         return;
     }
@@ -244,6 +255,24 @@ int PlayerController::folderIndex() const
     return -1;
 }
 
+int PlayerController::groupIndex() const
+{
+    if (m_groupPlaylist.isEmpty()) {
+        return -1;
+    }
+    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
+        return -1;
+    }
+
+    const QString currentPath = m_playlist[m_currentIndex].filePath;
+    for (int i = 0; i < m_groupPlaylist.size(); ++i) {
+        if (m_groupPlaylist[i].filePath == currentPath) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 int PlayerController::playlistCount() const
 {
     return m_playlist.size();
@@ -253,6 +282,9 @@ int PlayerController::activePlaylistCount() const
 {
     if (m_playMode == PlayMode::AllLoop) {
         return m_playlist.size();
+    }
+    if (!m_groupPlaylist.isEmpty()) {
+        return m_groupPlaylist.size();
     }
     if (!m_folderPlaylist.isEmpty()) {
         return m_folderPlaylist.size();

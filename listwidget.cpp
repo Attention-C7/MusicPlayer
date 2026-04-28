@@ -292,6 +292,7 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
 
     if (m_currentTab == 3) {
         m_controller->setPlaylist(m_allSongs);
+        m_controller->setGroupPlaylist(QList<SongInfo>());
         m_controller->setFolderPlaylist(m_allSongs);
 
         int targetIndex = -1;
@@ -314,6 +315,7 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
     }
 
     m_controller->setPlayMode(PlayMode::FolderLoop);
+    m_controller->setGroupPlaylist(QList<SongInfo>());
     m_controller->setFolderPlaylist(m_currentSongs);
     m_controller->setPlaylist(m_allSongs);
 
@@ -473,10 +475,11 @@ void ListWidget::handleGroupItemClicked(QListWidgetItem *item)
         return;
     }
 
-    m_controller->setPlaylist(groupSongs);
+    m_controller->setGroupPlaylist(groupSongs);
+    m_controller->setPlaylist(m_allSongs);
     int targetIndex = -1;
-    for (int i = 0; i < groupSongs.size(); ++i) {
-        if (groupSongs[i].filePath == filePath) {
+    for (int i = 0; i < m_allSongs.size(); ++i) {
+        if (m_allSongs[i].filePath == filePath) {
             targetIndex = i;
             break;
         }

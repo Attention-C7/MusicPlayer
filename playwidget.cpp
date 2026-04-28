@@ -436,7 +436,8 @@ void PlayWidget::updateIndexLabel()
     if (m_controller->playMode() == PlayMode::AllLoop) {
         index = m_controller->currentIndex();
     } else {
-        index = m_controller->folderIndex();
+        const int groupIdx = m_controller->groupIndex();
+        index = (groupIdx >= 0) ? groupIdx : m_controller->folderIndex();
     }
     const int total = m_controller->activePlaylistCount();
 

@@ -19,6 +19,7 @@ public:
 
     void setPlaylist(QList<SongInfo> songs);
     void setFolderPlaylist(QList<SongInfo> songs);
+    void setGroupPlaylist(QList<SongInfo> songs);
     void playSong(int index);
     void playPause();
     void prev();
@@ -27,6 +28,7 @@ public:
     void setPlayMode(PlayMode mode);
     int currentIndex() const;
     int folderIndex() const;
+    int groupIndex() const;
     int playlistCount() const;
     int activePlaylistCount() const;
     PlayMode playMode() const;
@@ -61,6 +63,7 @@ private:
     QAudioOutput *m_audioOutput;
     QList<SongInfo> m_playlist;
     QList<SongInfo> m_folderPlaylist;
+    QList<SongInfo> m_groupPlaylist;
     int m_currentIndex;
     PlayMode m_playMode;
     QTimer *m_seekTimer;
