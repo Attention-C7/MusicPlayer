@@ -297,6 +297,11 @@ PlayMode PlayerController::playMode() const
     return m_playMode;
 }
 
+QMediaPlayer::PlaybackState PlayerController::playbackState() const
+{
+    return m_player->playbackState();
+}
+
 void PlayerController::startSeekForward()
 {
     m_seekDirection = 1;

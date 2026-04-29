@@ -32,6 +32,7 @@ public:
     int playlistCount() const;
     int activePlaylistCount() const;
     PlayMode playMode() const;
+    QMediaPlayer::PlaybackState playbackState() const;
     void startSeekForward();
     void stopSeekForward();
     void startSeekBackward();
