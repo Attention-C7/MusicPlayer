@@ -10,5 +10,6 @@
     <file>icon/8shuffle.png</file>
     <file>icon/9volume.png</file>
     <file>icon/10list.png</file>
+    <file>icon/11beat.png</file>
   </qresource>
 </RCC>
