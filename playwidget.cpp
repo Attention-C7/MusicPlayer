@@ -115,8 +115,14 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
         updateIndexLabel();
     });
 
-    connect(m_controller, &PlayerController::errorOccurred, this, [this](const QString &message) {
-        QMessageBox::warning(this, QStringLiteral("Playback Error"), message);
+    connect(m_controller, &PlayerController::errorOccurred, this, [this](const QString &) {
+        QMessageBox msgBox(this);
+        msgBox.setWindowTitle(QStringLiteral("播放错误"));
+        msgBox.setText(QStringLiteral("文件无法播放，请检查文件格式是否正确"));
+        msgBox.setIcon(QMessageBox::Warning);
+        msgBox.setStandardButtons(QMessageBox::Ok);
+        msgBox.button(QMessageBox::Ok)->setText(QStringLiteral("确定"));
+        msgBox.exec();
     });
 
     connect(m_controller, &PlayerController::albumArtChanged, this, [this](const QPixmap &pixmap) {
