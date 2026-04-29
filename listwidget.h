@@ -33,6 +33,11 @@ public:
 signals:
     void backToPlayerRequested();
     void requestScan(QString rootPath);
+    void searchContextUpdated(
+        QList<SongInfo> allSongs,
+        QMap<QString, QList<SongInfo>> artistMap,
+        QMap<QString, QList<SongInfo>> albumMap
+    );
 
 private:
     void paintEvent(QPaintEvent *event) override;

@@ -7,6 +7,67 @@
 #include <QTimer>
 #include <QUrl>
 
+namespace {
+bool matchExactWithTone(const QString &normalized, const QString &corePattern)
+{
+    const QRegularExpression re(
+        QStringLiteral("^(?:%1)(?:一下|[啊吧呀呢嘛啦])?$").arg(corePattern)
+    );
+    return re.match(normalized).hasMatch();
+}
+
+bool matchLocalBasicCommand(const QString &input, QString &cmd, QString &param)
+{
+    const QString normalized = input.trimmed().toLower();
+    if (normalized.isEmpty()) {
+        return false;
+    }
+
+    if (matchExactWithTone(normalized, QStringLiteral("下一首|下一曲|next|下一个"))) {
+        cmd = QStringLiteral("next");
+        param.clear();
+        return true;
+    }
+    if (matchExactWithTone(normalized, QStringLiteral("上一首|上一曲|prev|上一个|previous"))) {
+        cmd = QStringLiteral("prev");
+        param.clear();
+        return true;
+    }
+    if (matchExactWithTone(normalized, QStringLiteral("播放|play|继续|resume"))) {
+        cmd = QStringLiteral("play");
+        param.clear();
+        return true;
+    }
+    if (matchExactWithTone(normalized, QStringLiteral("暂停|pause|停止|stop|停一下"))) {
+        cmd = QStringLiteral("pause");
+        param.clear();
+        return true;
+    }
+    if (matchExactWithTone(normalized, QStringLiteral("随机|shuffle|随机播放|乱序播放|随机模式"))) {
+        cmd = QStringLiteral("mode");
+        param = QStringLiteral("random");
+        return true;
+    }
+    if (matchExactWithTone(normalized, QStringLiteral("单曲循环|单曲|repeat.?one|循环单曲"))) {
+        cmd = QStringLiteral("mode");
+        param = QStringLiteral("single");
+        return true;
+    }
+    if (matchExactWithTone(normalized, QStringLiteral("目录循环|文件夹循环|列表循环|当前目录循环"))) {
+        cmd = QStringLiteral("mode");
+        param = QStringLiteral("folder");
+        return true;
+    }
+    if (matchExactWithTone(normalized, QStringLiteral("全部循环|循环全部|全循环|repeat.?all"))) {
+        cmd = QStringLiteral("mode");
+        param = QStringLiteral("all");
+        return true;
+    }
+
+    return false;
+}
+}
+
 AiController::AiController(QObject *parent)
     : QObject(parent)
     , m_manager(new QNetworkAccessManager(this))
@@ -14,52 +75,107 @@ AiController::AiController(QObject *parent)
 {
 }
 
+void AiController::setSearchContext(
+    QList<SongInfo> allSongs,
+    QMap<QString, QList<SongInfo>> artistMap,
+    QMap<QString, QList<SongInfo>> albumMap
+)
+{
+    m_allSongs = allSongs;
+    m_artistMap = artistMap;
+    m_albumMap = albumMap;
+}
+
 bool AiController::recognize(QString userInput)
 {
-    const QString normalized = userInput.trimmed().toLower();
-    if (normalized.isEmpty()) {
+    const QString trimmedInput = userInput.trimmed();
+    if (trimmedInput.isEmpty()) {
         emit recognizeFailed(QStringLiteral("输入为空"));
         return true;
     }
 
-    auto exactMatch = [&normalized](const QString &corePattern) {
-        const QRegularExpression re(
-            QStringLiteral("^(?:%1)(?:一下|[啊吧呀呢嘛啦])?$").arg(corePattern)
-        );
-        return re.match(normalized).hasMatch();
+    QString localCmd;
+    QString localParam;
+    if (matchLocalBasicCommand(trimmedInput, localCmd, localParam)) {
+        emit commandReady(localCmd, localParam);
+        return true;
+    }
+
+    auto findSongByKeyword = [this](const QString &keyword) -> QString {
+        const QString k = keyword.trimmed();
+        if (k.isEmpty()) {
+            return QString();
+        }
+
+        for (const SongInfo &song : m_allSongs) {
+            if (song.title.contains(k, Qt::CaseInsensitive)) {
+                return song.filePath;
+            }
+        }
+
+        for (auto it = m_artistMap.cbegin(); it != m_artistMap.cend(); ++it) {
+            if (it.key().contains(k, Qt::CaseInsensitive) && !it.value().isEmpty()) {
+                return it.value().first().filePath;
+            }
+        }
+
+        return QString();
     };
 
-    if (exactMatch(QStringLiteral("下一首|下一曲|next"))) {
-        emit commandReady(QStringLiteral("next"), QString());
-        return true;
+    auto findByArtistKeyword = [this](const QString &keyword) -> QString {
+        const QString k = keyword.trimmed();
+        if (k.isEmpty()) {
+            return QString();
+        }
+        for (auto it = m_artistMap.cbegin(); it != m_artistMap.cend(); ++it) {
+            if (it.key().contains(k, Qt::CaseInsensitive) && !it.value().isEmpty()) {
+                return it.value().first().filePath;
+            }
+        }
+        return QString();
+    };
+
+    {
+        const QRegularExpression rePlayArtist(QStringLiteral("^播放(.+)的歌$"));
+        const QRegularExpressionMatch match = rePlayArtist.match(trimmedInput);
+        if (match.hasMatch()) {
+            const QString keyword = match.captured(1).trimmed();
+            const QString filePath = findByArtistKeyword(keyword);
+            if (!filePath.isEmpty()) {
+                emit commandReady(QStringLiteral("search"), filePath);
+                return true;
+            }
+        }
     }
-    if (exactMatch(QStringLiteral("上一首|上一曲|prev|previous"))) {
-        emit commandReady(QStringLiteral("prev"), QString());
-        return true;
+
+    {
+        const QRegularExpression rePlayAny(QStringLiteral("^播放(.+)$"));
+        const QRegularExpressionMatch match = rePlayAny.match(trimmedInput);
+        if (match.hasMatch()) {
+            const QString keyword = match.captured(1).trimmed();
+            if (!keyword.isEmpty()) {
+                const QString filePath = findSongByKeyword(keyword);
+                if (!filePath.isEmpty()) {
+                    emit commandReady(QStringLiteral("search"), filePath);
+                    return true;
+                }
+            }
+        }
     }
-    if (exactMatch(QStringLiteral("播放|play|继续"))) {
-        emit commandReady(QStringLiteral("play"), QString());
-        return true;
-    }
-    if (exactMatch(QStringLiteral("暂停|pause|停"))) {
-        emit commandReady(QStringLiteral("pause"), QString());
-        return true;
-    }
-    if (exactMatch(QStringLiteral("随机|shuffle|乱序"))) {
-        emit commandReady(QStringLiteral("mode"), QStringLiteral("random"));
-        return true;
-    }
-    if (exactMatch(QStringLiteral("单曲循环|repeat one"))) {
-        emit commandReady(QStringLiteral("mode"), QStringLiteral("single"));
-        return true;
-    }
-    if (exactMatch(QStringLiteral("目录循环|列表循环"))) {
-        emit commandReady(QStringLiteral("mode"), QStringLiteral("folder"));
-        return true;
-    }
-    if (exactMatch(QStringLiteral("全部循环|循环全部"))) {
-        emit commandReady(QStringLiteral("mode"), QStringLiteral("all"));
-        return true;
+
+    {
+        const QRegularExpression reSearchAny(QStringLiteral("^搜索(.+)$"));
+        const QRegularExpressionMatch match = reSearchAny.match(trimmedInput);
+        if (match.hasMatch()) {
+            const QString keyword = match.captured(1).trimmed();
+            if (!keyword.isEmpty()) {
+                const QString filePath = findSongByKeyword(keyword);
+                if (!filePath.isEmpty()) {
+                    emit commandReady(QStringLiteral("search"), filePath);
+                    return true;
+                }
+            }
+        }
     }
 
     if (m_apiKey.isEmpty()) {
@@ -80,17 +196,16 @@ bool AiController::recognize(QString userInput)
     systemMessage.insert(QStringLiteral("role"), QStringLiteral("system"));
     systemMessage.insert(
         QStringLiteral("content"),
-        QStringLiteral("你是音乐播放器的语音控制助手，用户会输入自然语言指令，你只能返回以下JSON格式之一，不要返回任何其他内容："
-                       "{\"cmd\":\"play\"}"
-                       "{\"cmd\":\"pause\"}"
-                       "{\"cmd\":\"prev\"}"
-                       "{\"cmd\":\"next\"}"
-                       "{\"cmd\":\"mode\",\"param\":\"single\"}"
-                       "{\"cmd\":\"mode\",\"param\":\"folder\"}"
-                       "{\"cmd\":\"mode\",\"param\":\"all\"}"
-                       "{\"cmd\":\"mode\",\"param\":\"random\"}"
-                       "{\"cmd\":\"search\",\"param\":\"歌曲名\"}"
-                       "{\"cmd\":\"unknown\"}")
+        QStringLiteral(
+            "你是音乐播放器助手，用户会用自然语言描述他想要的操作，你需要理解意图并返回播放器能执行的操作指令JSON。"
+            "可用指令："
+            "播放/暂停：{\"cmd\":\"play\"} {\"cmd\":\"pause\"}；"
+            "切歌：{\"cmd\":\"next\"} {\"cmd\":\"prev\"}；"
+            "模式：{\"cmd\":\"mode\",\"param\":\"single/folder/all/random\"}；"
+            "搜索：{\"cmd\":\"search\",\"param\":\"搜索关键词\"}；"
+            "无法执行：{\"cmd\":\"unknown\",\"reason\":\"原因说明\"}。"
+            "请根据用户意图选择最合适的指令返回。不要解释，只返回JSON。"
+        )
     );
     messages.append(systemMessage);
 
@@ -104,14 +219,21 @@ bool AiController::recognize(QString userInput)
     QNetworkReply *reply = m_manager->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
     QTimer *timeoutTimer = new QTimer(this);
     timeoutTimer->setSingleShot(true);
-    timeoutTimer->start(8000);
-    connect(timeoutTimer, &QTimer::timeout, this, [this, reply, timeoutTimer]() {
+    timeoutTimer->start(10000);
+    connect(timeoutTimer, &QTimer::timeout, this, [this, reply, timeoutTimer, trimmedInput]() {
         if (reply->isRunning()) {
             reply->setProperty("timeout_aborted", true);
             reply->abort();
         }
         timeoutTimer->deleteLater();
-        emit recognizeFailed(QStringLiteral("请求超时，请重试"));
+
+        QString cmd;
+        QString param;
+        const bool matched = matchLocalBasicCommand(trimmedInput, cmd, param);
+        emit recognizeFailed(QStringLiteral("未能及时响应，已尝试本地处理"));
+        if (matched) {
+            emit commandReady(cmd, param);
+        }
     });
 
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {

@@ -1,15 +1,26 @@
 #include "voiceinputwidget.h"
 #include "ui_voiceinputwidget.h"
 
+#include <QFileInfo>
 #include <QPropertyAnimation>
 
-VoiceInputWidget::VoiceInputWidget(AiController *aiController, PlayerController *playerController, QWidget *parent)
+VoiceInputWidget::VoiceInputWidget(
+    AiController *aiController,
+    PlayerController *playerController,
+    QList<SongInfo> allSongs,
+    QMap<QString, QList<SongInfo>> artistMap,
+    QMap<QString, QList<SongInfo>> albumMap,
+    QWidget *parent
+)
     : QWidget(parent)
     , ui(new Ui::VoiceInputWidget)
     , m_aiController(aiController)
     , m_playerController(playerController)
     , m_animation(new QPropertyAnimation(this))
     , m_expanded(false)
+    , m_allSongs(allSongs)
+    , m_artistMap(artistMap)
+    , m_albumMap(albumMap)
 {
     ui->setupUi(this);
 
@@ -17,6 +28,9 @@ VoiceInputWidget::VoiceInputWidget(AiController *aiController, PlayerController 
     ui->btn_toggle->setText(QStringLiteral("🎤 语音/文字控制"));
     ui->lbl_hint->setText(QStringLiteral("当前为文字模式，语音录入需接入麦克风SDK"));
     ui->lbl_result->setText(QString());
+    if (m_aiController != nullptr) {
+        m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
+    }
 
     m_animation->setTargetObject(ui->panel_input);
     m_animation->setPropertyName("maximumHeight");
@@ -44,6 +58,10 @@ VoiceInputWidget::VoiceInputWidget(AiController *aiController, PlayerController 
 
     connect(m_aiController, &AiController::commandReady, this, &VoiceInputWidget::handleCommand);
     connect(m_aiController, &AiController::recognizeFailed, this, [this](const QString &error) {
+        if (error.contains(QStringLiteral("未能及时响应"))) {
+            ui->lbl_result->setText(QStringLiteral("未能及时响应，已尝试本地处理"));
+            return;
+        }
         if (error.contains(QStringLiteral("超时"))) {
             ui->lbl_result->setText(QStringLiteral("网络超时，请重试"));
             return;
@@ -55,6 +73,20 @@ VoiceInputWidget::VoiceInputWidget(AiController *aiController, PlayerController 
 VoiceInputWidget::~VoiceInputWidget()
 {
     delete ui;
+}
+
+void VoiceInputWidget::setSearchContext(
+    QList<SongInfo> allSongs,
+    QMap<QString, QList<SongInfo>> artistMap,
+    QMap<QString, QList<SongInfo>> albumMap
+)
+{
+    m_allSongs = allSongs;
+    m_artistMap = artistMap;
+    m_albumMap = albumMap;
+    if (m_aiController != nullptr) {
+        m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
+    }
 }
 
 void VoiceInputWidget::toggleExpanded()
@@ -119,7 +151,43 @@ void VoiceInputWidget::handleCommand(const QString &cmd, const QString &param)
     }
 
     if (cmd == QStringLiteral("search")) {
-        ui->lbl_result->setText(QStringLiteral("搜索功能待实现"));
+        const QString keyword = param.trimmed();
+        if (keyword.isEmpty()) {
+            ui->lbl_result->setText(QStringLiteral("未找到相关歌曲"));
+            return;
+        }
+
+        int targetIndex = -1;
+        for (int i = 0; i < m_allSongs.size(); ++i) {
+            if (m_allSongs[i].filePath == keyword) {
+                targetIndex = i;
+                break;
+            }
+        }
+
+        if (targetIndex < 0) {
+            for (int i = 0; i < m_allSongs.size(); ++i) {
+                const SongInfo &song = m_allSongs[i];
+                if (song.title.contains(keyword, Qt::CaseInsensitive)
+                    || song.artist.contains(keyword, Qt::CaseInsensitive)) {
+                    targetIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (targetIndex < 0) {
+            ui->lbl_result->setText(QStringLiteral("未找到相关歌曲：") + keyword);
+            return;
+        }
+
+        m_playerController->setPlaylist(m_allSongs);
+        m_playerController->playSong(targetIndex);
+        const QFileInfo info(m_allSongs[targetIndex].filePath);
+        const QString title = m_allSongs[targetIndex].title.trimmed().isEmpty()
+                                  ? info.completeBaseName()
+                                  : m_allSongs[targetIndex].title.trimmed();
+        ui->lbl_result->setText(QStringLiteral("已播放：") + title);
         return;
     }
 

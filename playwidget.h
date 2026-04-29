@@ -24,6 +24,11 @@ class PlayWidget : public QWidget
 public:
     explicit PlayWidget(PlayerController *controller, QWidget *parent = nullptr);
     ~PlayWidget();
+    void setSearchContext(
+        QList<SongInfo> allSongs,
+        QMap<QString, QList<SongInfo>> artistMap,
+        QMap<QString, QList<SongInfo>> albumMap
+    );
 
 signals:
     void showListRequested();
@@ -47,6 +52,9 @@ private:
     PlayerController *m_controller;
     AiController *m_aiController;
     VoiceInputWidget *m_voiceWidget;
+    QList<SongInfo> m_allSongs;
+    QMap<QString, QList<SongInfo>> m_artistMap;
+    QMap<QString, QList<SongInfo>> m_albumMap;
     bool m_isDragging;
     QTimer *m_longPressTimer;
     int m_pressDirection;

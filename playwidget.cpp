@@ -18,6 +18,9 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     , m_controller(controller)
     , m_aiController(new AiController(this))
     , m_voiceWidget(nullptr)
+    , m_allSongs()
+    , m_artistMap()
+    , m_albumMap()
     , m_isDragging(false)
     , m_longPressTimer(new QTimer(this))
     , m_pressDirection(0)
@@ -26,7 +29,10 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->setupUi(this);
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(false);
-    m_voiceWidget = new VoiceInputWidget(m_aiController, m_controller, this);
+    m_voiceWidget = new VoiceInputWidget(
+        m_aiController, m_controller,
+        m_allSongs, m_artistMap, m_albumMap, this
+    );
     if (ui->verticalLayout_main != nullptr) {
         ui->verticalLayout_main->addWidget(m_voiceWidget);
     }
@@ -266,6 +272,23 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
 
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
+    }
+}
+
+void PlayWidget::setSearchContext(
+    QList<SongInfo> allSongs,
+    QMap<QString, QList<SongInfo>> artistMap,
+    QMap<QString, QList<SongInfo>> albumMap
+)
+{
+    m_allSongs = allSongs;
+    m_artistMap = artistMap;
+    m_albumMap = albumMap;
+    if (m_aiController != nullptr) {
+        m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
+    }
+    if (m_voiceWidget != nullptr) {
+        m_voiceWidget->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
     }
 }
 

@@ -112,6 +112,7 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
         }
 
         buildGroupMaps();
+        emit searchContextUpdated(m_allSongs, m_artistMap, m_albumMap);
         if (m_currentTab == 1 || m_currentTab == 2) {
             refreshGroupList(m_currentTab);
         }
@@ -528,6 +529,7 @@ void ListWidget::onScanFinished(QList<SongInfo> songs)
 {
     m_allSongs = songs;
     buildGroupMaps();
+    emit searchContextUpdated(m_allSongs, m_artistMap, m_albumMap);
     m_scanReady = true;
     if (m_currentTab == 0) {
         refreshList();

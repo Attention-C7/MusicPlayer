@@ -31,6 +31,7 @@ MusicPlayer::MusicPlayer(QWidget *parent)
 
     connect(m_playWidget, &PlayWidget::showListRequested, this, &MusicPlayer::showList);
     connect(m_listWidget, &ListWidget::backToPlayerRequested, this, &MusicPlayer::hideList);
+    connect(m_listWidget, &ListWidget::searchContextUpdated, m_playWidget, &PlayWidget::setSearchContext);
 }
 
 MusicPlayer::~MusicPlayer()

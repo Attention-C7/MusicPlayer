@@ -4,6 +4,10 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QJsonDocument>
+#include <QList>
+#include <QMap>
+
+#include "songinfo.h"
 
 class AiController : public QObject
 {
@@ -12,6 +16,11 @@ class AiController : public QObject
 public:
     explicit AiController(QObject *parent = nullptr);
     bool recognize(QString userInput);
+    void setSearchContext(
+        QList<SongInfo> allSongs,
+        QMap<QString, QList<SongInfo>> artistMap,
+        QMap<QString, QList<SongInfo>> albumMap
+    );
 
 signals:
     void commandReady(QString command, QString param);
@@ -22,4 +31,7 @@ private:
 
     QNetworkAccessManager *m_manager;
     QString m_apiKey;
+    QList<SongInfo> m_allSongs;
+    QMap<QString, QList<SongInfo>> m_artistMap;
+    QMap<QString, QList<SongInfo>> m_albumMap;
 };
