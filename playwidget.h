@@ -3,10 +3,12 @@
 #include <QLabel>
 #include <QMap>
 #include <QPixmap>
+#include <QPushButton>
 #include <QTimer>
 #include <QWidget>
 
 #include "aicontroller.h"
+#include "beatanalyzer.h"
 #include "playercontroller.h"
 #include "songinfo.h"
 #include "voiceinputwidget.h"
@@ -38,6 +40,9 @@ private:
     void clearLrcLabels();
     void updateBackground(const QPixmap &pixmap);
     void updateIndexLabel();
+    void updateBrightnessByPosition(qint64 position);
+    float smoothBrightness(float target);
+    int overlayAlphaFromBrightness(float brightness) const;
 
     Ui::PlayWidget *ui;
     QPixmap m_bgPixmap;
@@ -46,7 +51,13 @@ private:
     QList<QLabel*> m_lrcLabels;
     PlayerController *m_controller;
     AiController *m_aiController;
+    BeatAnalyzer *m_beatAnalyzer;
     VoiceInputWidget *m_voiceWidget;
+    QPushButton *m_btnBeatLight;
+    float m_brightnessNow;
+    float m_brightnessBase;
+    float m_brightnessGain;
+    bool m_beatEffectEnabled;
     bool m_isDragging;
     QTimer *m_longPressTimer;
     int m_pressDirection;

@@ -27,6 +27,8 @@ set(PROJECT_SOURCES
         playwidget.cpp
         playwidget.h
         playwidget.ui
+        beatanalyzer.h
+        beatanalyzer.cpp
         aicontroller.h
         aicontroller.cpp
         voiceinputwidget.h
