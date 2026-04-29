@@ -14,6 +14,8 @@ VoiceInputWidget::VoiceInputWidget(AiController *aiController, PlayerController 
     ui->setupUi(this);
 
     ui->panel_input->setMaximumHeight(0);
+    ui->btn_toggle->setText(QStringLiteral("🎤 语音/文字控制"));
+    ui->lbl_hint->setText(QStringLiteral("当前为文字模式，语音录入需接入麦克风SDK"));
     ui->lbl_result->setText(QString());
 
     m_animation->setTargetObject(ui->panel_input);

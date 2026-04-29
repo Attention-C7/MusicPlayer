@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QTimer>
 #include <QUrl>
 
@@ -21,44 +22,42 @@ bool AiController::recognize(QString userInput)
         return true;
     }
 
-    auto containsAny = [&normalized](const QStringList &keywords) {
-        for (const QString &keyword : keywords) {
-            if (normalized.contains(keyword)) {
-                return true;
-            }
-        }
-        return false;
+    auto exactMatch = [&normalized](const QString &corePattern) {
+        const QRegularExpression re(
+            QStringLiteral("^(?:%1)(?:一下|[啊吧呀呢嘛啦])?$").arg(corePattern)
+        );
+        return re.match(normalized).hasMatch();
     };
 
-    if (containsAny({QStringLiteral("下一首"), QStringLiteral("下一曲"), QStringLiteral("next")})) {
+    if (exactMatch(QStringLiteral("下一首|下一曲|next"))) {
         emit commandReady(QStringLiteral("next"), QString());
         return true;
     }
-    if (containsAny({QStringLiteral("上一首"), QStringLiteral("上一曲"), QStringLiteral("prev"), QStringLiteral("previous")})) {
+    if (exactMatch(QStringLiteral("上一首|上一曲|prev|previous"))) {
         emit commandReady(QStringLiteral("prev"), QString());
         return true;
     }
-    if (containsAny({QStringLiteral("播放"), QStringLiteral("play"), QStringLiteral("继续")})) {
+    if (exactMatch(QStringLiteral("播放|play|继续"))) {
         emit commandReady(QStringLiteral("play"), QString());
         return true;
     }
-    if (containsAny({QStringLiteral("暂停"), QStringLiteral("pause"), QStringLiteral("停")})) {
+    if (exactMatch(QStringLiteral("暂停|pause|停"))) {
         emit commandReady(QStringLiteral("pause"), QString());
         return true;
     }
-    if (containsAny({QStringLiteral("随机"), QStringLiteral("shuffle"), QStringLiteral("乱序")})) {
+    if (exactMatch(QStringLiteral("随机|shuffle|乱序"))) {
         emit commandReady(QStringLiteral("mode"), QStringLiteral("random"));
         return true;
     }
-    if (containsAny({QStringLiteral("单曲循环"), QStringLiteral("repeat one")})) {
+    if (exactMatch(QStringLiteral("单曲循环|repeat one"))) {
         emit commandReady(QStringLiteral("mode"), QStringLiteral("single"));
         return true;
     }
-    if (containsAny({QStringLiteral("目录循环"), QStringLiteral("列表循环")})) {
+    if (exactMatch(QStringLiteral("目录循环|列表循环"))) {
         emit commandReady(QStringLiteral("mode"), QStringLiteral("folder"));
         return true;
     }
-    if (containsAny({QStringLiteral("全部循环"), QStringLiteral("循环全部")})) {
+    if (exactMatch(QStringLiteral("全部循环|循环全部"))) {
         emit commandReady(QStringLiteral("mode"), QStringLiteral("all"));
         return true;
     }

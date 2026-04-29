@@ -34,7 +34,7 @@
      <item>
       <widget class="QPushButton" name="btn_toggle">
        <property name="text">
-        <string>🎤 语音控制</string>
+        <string>🎤 语音/文字控制</string>
        </property>
       </widget>
      </item>
@@ -91,6 +91,16 @@
          </widget>
         </item>
        </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbl_hint">
+        <property name="text">
+         <string>当前为文字模式，语音录入需接入麦克风SDK</string>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">color: #888888; font-size: 12px;</string>
+        </property>
+       </widget>
       </item>
       <item>
        <widget class="QLabel" name="lbl_result">
