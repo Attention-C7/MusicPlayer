@@ -62,7 +62,7 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->btn_prev->setIcon(QIcon(QStringLiteral(":/icons/icon/1previous.png")));
     ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
     ui->btn_next->setIcon(QIcon(QStringLiteral(":/icons/icon/4next.png")));
-    ui->btn_beat->setIcon(QIcon(QStringLiteral(":/icons/icon/9volume.png")));
+    ui->btn_beat->setIcon(QIcon(QStringLiteral(":/icons/icon/11beat.png")));
     ui->btn_showList->setIcon(QIcon(QStringLiteral(":/icons/icon/10list.png")));
     const QSize iconSize(28, 28);
     ui->btn_prev->setIconSize(iconSize);
