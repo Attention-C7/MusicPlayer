@@ -2,11 +2,13 @@
 #include "ui_playwidget.h"
 
 #include <QFileInfo>
+#include <QGridLayout>
 #include <QIcon>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
 #include <QScrollBar>
+#include <QSpacerItem>
 #include <QVBoxLayout>
 
 PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
@@ -122,6 +124,25 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
         msgBox.setIcon(QMessageBox::Warning);
         msgBox.setStandardButtons(QMessageBox::Ok);
         msgBox.button(QMessageBox::Ok)->setText(QStringLiteral("确定"));
+
+        // Set minimum width so the message text won't be truncated.
+        msgBox.setMinimumWidth(400);
+
+        // Force layout expansion for stable dialog width.
+        QSpacerItem *spacer = new QSpacerItem(
+            400, 0,
+            QSizePolicy::Minimum,
+            QSizePolicy::Expanding
+        );
+        QGridLayout *layout =
+            qobject_cast<QGridLayout*>(msgBox.layout());
+        if (layout != nullptr) {
+            layout->addItem(
+                spacer, layout->rowCount(), 0,
+                1, layout->columnCount()
+            );
+        }
+
         msgBox.exec();
     });
 
