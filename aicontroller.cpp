@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QNetworkRequest>
+#include <QTimer>
 #include <QUrl>
 
 AiController::AiController(QObject *parent)
@@ -12,15 +13,59 @@ AiController::AiController(QObject *parent)
 {
 }
 
-void AiController::recognize(QString userInput)
+bool AiController::recognize(QString userInput)
 {
-    if (userInput.trimmed().isEmpty()) {
+    const QString normalized = userInput.trimmed().toLower();
+    if (normalized.isEmpty()) {
         emit recognizeFailed(QStringLiteral("输入为空"));
-        return;
+        return true;
     }
+
+    auto containsAny = [&normalized](const QStringList &keywords) {
+        for (const QString &keyword : keywords) {
+            if (normalized.contains(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    if (containsAny({QStringLiteral("下一首"), QStringLiteral("下一曲"), QStringLiteral("next")})) {
+        emit commandReady(QStringLiteral("next"), QString());
+        return true;
+    }
+    if (containsAny({QStringLiteral("上一首"), QStringLiteral("上一曲"), QStringLiteral("prev"), QStringLiteral("previous")})) {
+        emit commandReady(QStringLiteral("prev"), QString());
+        return true;
+    }
+    if (containsAny({QStringLiteral("播放"), QStringLiteral("play"), QStringLiteral("继续")})) {
+        emit commandReady(QStringLiteral("play"), QString());
+        return true;
+    }
+    if (containsAny({QStringLiteral("暂停"), QStringLiteral("pause"), QStringLiteral("停")})) {
+        emit commandReady(QStringLiteral("pause"), QString());
+        return true;
+    }
+    if (containsAny({QStringLiteral("随机"), QStringLiteral("shuffle"), QStringLiteral("乱序")})) {
+        emit commandReady(QStringLiteral("mode"), QStringLiteral("random"));
+        return true;
+    }
+    if (containsAny({QStringLiteral("单曲循环"), QStringLiteral("repeat one")})) {
+        emit commandReady(QStringLiteral("mode"), QStringLiteral("single"));
+        return true;
+    }
+    if (containsAny({QStringLiteral("目录循环"), QStringLiteral("列表循环")})) {
+        emit commandReady(QStringLiteral("mode"), QStringLiteral("folder"));
+        return true;
+    }
+    if (containsAny({QStringLiteral("全部循环"), QStringLiteral("循环全部")})) {
+        emit commandReady(QStringLiteral("mode"), QStringLiteral("all"));
+        return true;
+    }
+
     if (m_apiKey.isEmpty()) {
         emit recognizeFailed(QStringLiteral("未配置 DASHSCOPE_API_KEY"));
-        return;
+        return false;
     }
 
     QNetworkRequest request(QUrl(QStringLiteral("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")));
@@ -58,8 +103,23 @@ void AiController::recognize(QString userInput)
     payload.insert(QStringLiteral("messages"), messages);
 
     QNetworkReply *reply = m_manager->post(request, QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    QTimer *timeoutTimer = new QTimer(this);
+    timeoutTimer->setSingleShot(true);
+    timeoutTimer->start(8000);
+    connect(timeoutTimer, &QTimer::timeout, this, [this, reply, timeoutTimer]() {
+        if (reply->isRunning()) {
+            reply->setProperty("timeout_aborted", true);
+            reply->abort();
+        }
+        timeoutTimer->deleteLater();
+        emit recognizeFailed(QStringLiteral("请求超时，请重试"));
+    });
+
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
+        if (reply->property("timeout_aborted").toBool()) {
+            return;
+        }
 
         if (reply->error() != QNetworkReply::NoError) {
             emit recognizeFailed(reply->errorString());
@@ -105,6 +165,13 @@ void AiController::recognize(QString userInput)
 
         emit commandReady(cmd, param);
     });
+
+    connect(reply, &QNetworkReply::finished, this, [timeoutTimer]() {
+        timeoutTimer->stop();
+        timeoutTimer->deleteLater();
+    });
+
+    return false;
 }
 
 QString AiController::sanitizeJsonText(const QString &text) const

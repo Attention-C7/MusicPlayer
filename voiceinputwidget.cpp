@@ -33,13 +33,19 @@ VoiceInputWidget::VoiceInputWidget(AiController *aiController, PlayerController 
             return;
         }
 
-        m_aiController->recognize(input);
+        const bool handledByLocal = m_aiController->recognize(input);
         ui->lineEdit_input->clear();
-        ui->lbl_result->setText(QStringLiteral("识别中..."));
+        if (!handledByLocal) {
+            ui->lbl_result->setText(QStringLiteral("联网识别中..."));
+        }
     });
 
     connect(m_aiController, &AiController::commandReady, this, &VoiceInputWidget::handleCommand);
     connect(m_aiController, &AiController::recognizeFailed, this, [this](const QString &error) {
+        if (error.contains(QStringLiteral("超时"))) {
+            ui->lbl_result->setText(QStringLiteral("网络超时，请重试"));
+            return;
+        }
         ui->lbl_result->setText(QStringLiteral("网络错误：") + error);
     });
 }

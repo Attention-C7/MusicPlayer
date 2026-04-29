@@ -11,7 +11,7 @@ class AiController : public QObject
 
 public:
     explicit AiController(QObject *parent = nullptr);
-    void recognize(QString userInput);
+    bool recognize(QString userInput);
 
 signals:
     void commandReady(QString command, QString param);
