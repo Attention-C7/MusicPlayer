@@ -17,13 +17,7 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     , m_currentLrcIndex(-1)
     , m_controller(controller)
     , m_aiController(new AiController(this))
-    , m_beatAnalyzer(new BeatAnalyzer(this))
     , m_voiceWidget(nullptr)
-    , m_btnBeatLight(nullptr)
-    , m_brightnessNow(0.35f)
-    , m_brightnessBase(0.35f)
-    , m_brightnessGain(0.55f)
-    , m_beatEffectEnabled(true)
     , m_isDragging(false)
     , m_longPressTimer(new QTimer(this))
     , m_pressDirection(0)
@@ -36,33 +30,6 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     if (ui->verticalLayout_main != nullptr) {
         ui->verticalLayout_main->addWidget(m_voiceWidget);
     }
-    m_btnBeatLight = new QPushButton(QStringLiteral("律动灯:开"), this);
-    m_btnBeatLight->setMinimumSize(QSize(72, 36));
-    if (ui->horizontalLayout_controls != nullptr) {
-        ui->horizontalLayout_controls->addWidget(m_btnBeatLight);
-    }
-
-    connect(m_beatAnalyzer, &BeatAnalyzer::analyzeFinished, this, [this]() {
-        // Keep UI responsive; effect applies on upcoming position updates.
-        if (!m_beatAnalyzer->isReady()) {
-            m_brightnessNow = m_brightnessBase;
-        }
-    });
-
-    connect(m_beatAnalyzer, &BeatAnalyzer::analyzeFailed, this, [this](const QString &) {
-        m_brightnessNow = m_brightnessBase;
-        update();
-    });
-
-    connect(m_btnBeatLight, &QPushButton::clicked, this, [this]() {
-        m_beatEffectEnabled = !m_beatEffectEnabled;
-        m_btnBeatLight->setText(m_beatEffectEnabled ? QStringLiteral("律动灯:开")
-                                                    : QStringLiteral("律动灯:关"));
-        if (!m_beatEffectEnabled) {
-            m_brightnessNow = m_brightnessBase;
-            update();
-        }
-    });
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
@@ -124,12 +91,10 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
         ui->lbl_artist->setText(artist);
         ui->lbl_album->setText(album);
         updateIndexLabel();
-        m_beatAnalyzer->analyze(info.filePath);
     });
 
     connect(m_controller, &PlayerController::positionChanged, this, [this](qint64 position) {
         updateLrcDisplay(position);
-        updateBrightnessByPosition(position);
         if (m_isDragging) {
             return;
         }
@@ -490,7 +455,7 @@ void PlayWidget::paintEvent(QPaintEvent *event)
 
     if (!m_bgPixmap.isNull()) {
         painter.drawPixmap(rect(), m_bgPixmap);
-        painter.fillRect(rect(), QColor(10, 10, 20, overlayAlphaFromBrightness(m_brightnessNow)));
+        painter.fillRect(rect(), QColor(10, 10, 20, 180));
     } else {
         painter.fillRect(rect(), QColor("#1a1a2e"));
     }
@@ -511,34 +476,4 @@ void PlayWidget::updateIndexLabel()
 
     const int displayIndex = (index >= 0) ? (index + 1) : 0;
     ui->lbl_index->setText(QStringLiteral("%1/%2").arg(displayIndex).arg(total));
-}
-
-void PlayWidget::updateBrightnessByPosition(qint64 position)
-{
-    if (!m_beatEffectEnabled) {
-        m_brightnessNow = m_brightnessBase;
-        return;
-    }
-
-    float target = m_brightnessBase;
-    if (m_beatAnalyzer->isReady()) {
-        const float intensity = m_beatAnalyzer->intensityAt(position);
-        target = m_brightnessBase + m_brightnessGain * intensity;
-    }
-    m_brightnessNow = smoothBrightness(target);
-    update();
-}
-
-float PlayWidget::smoothBrightness(float target)
-{
-    const float bounded = qBound(0.0f, target, 1.0f);
-    m_brightnessNow = 0.85f * m_brightnessNow + 0.15f * bounded;
-    return m_brightnessNow;
-}
-
-int PlayWidget::overlayAlphaFromBrightness(float brightness) const
-{
-    const float bounded = qBound(0.0f, brightness, 1.0f);
-    const float alpha = 200.0f - bounded * 80.0f;
-    return qBound(120, static_cast<int>(alpha), 200);
 }
