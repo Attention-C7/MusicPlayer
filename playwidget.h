@@ -6,8 +6,10 @@
 #include <QTimer>
 #include <QWidget>
 
+#include "aicontroller.h"
 #include "playercontroller.h"
 #include "songinfo.h"
+#include "voiceinputwidget.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -43,6 +45,8 @@ private:
     int m_currentLrcIndex;
     QList<QLabel*> m_lrcLabels;
     PlayerController *m_controller;
+    AiController *m_aiController;
+    VoiceInputWidget *m_voiceWidget;
     bool m_isDragging;
     QTimer *m_longPressTimer;
     int m_pressDirection;

@@ -16,6 +16,8 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     , ui(new Ui::PlayWidget)
     , m_currentLrcIndex(-1)
     , m_controller(controller)
+    , m_aiController(new AiController(this))
+    , m_voiceWidget(nullptr)
     , m_isDragging(false)
     , m_longPressTimer(new QTimer(this))
     , m_pressDirection(0)
@@ -24,6 +26,10 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->setupUi(this);
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(false);
+    m_voiceWidget = new VoiceInputWidget(m_aiController, m_controller, this);
+    if (ui->verticalLayout_main != nullptr) {
+        ui->verticalLayout_main->addWidget(m_voiceWidget);
+    }
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>VoiceInputWidget</class>
+ <widget class="QWidget" name="VoiceInputWidget">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>760</width>
+    <height>110</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>VoiceInputWidget</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_main">
+   <property name="spacing">
+    <number>6</number>
+   </property>
+   <property name="leftMargin">
+    <number>0</number>
+   </property>
+   <property name="topMargin">
+    <number>0</number>
+   </property>
+   <property name="rightMargin">
+    <number>0</number>
+   </property>
+   <property name="bottomMargin">
+    <number>0</number>
+   </property>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_toggle">
+     <item>
+      <widget class="QPushButton" name="btn_toggle">
+       <property name="text">
+        <string>🎤 语音控制</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_toggle">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QWidget" name="panel_input">
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>0</height>
+      </size>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_panel">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <property name="rightMargin">
+       <number>0</number>
+      </property>
+      <property name="bottomMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_input">
+        <item>
+         <widget class="QLineEdit" name="lineEdit_input">
+          <property name="placeholderText">
+           <string>输入指令，如：下一首、随机播放...</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="btn_send">
+          <property name="text">
+           <string>发送</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="lbl_result">
+        <property name="text">
+         <string/>
+        </property>
+        <property name="styleSheet">
+         <string notr="true">color: #888888; font-size: 12px;</string>
+        </property>
+       </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

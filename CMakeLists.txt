@@ -9,8 +9,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia Network)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia Network)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(TAGLIB REQUIRED taglib)
 
@@ -27,6 +27,11 @@ set(PROJECT_SOURCES
         playwidget.cpp
         playwidget.h
         playwidget.ui
+        aicontroller.h
+        aicontroller.cpp
+        voiceinputwidget.h
+        voiceinputwidget.cpp
+        voiceinputwidget.ui
         listwidget.cpp
         listwidget.h
         listwidget.ui
@@ -63,6 +68,7 @@ endif()
 target_link_libraries(MusicPlayer PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Multimedia
+    Qt${QT_VERSION_MAJOR}::Network
     ${TAGLIB_LIBRARIES}
 )
 
