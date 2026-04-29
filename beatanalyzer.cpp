@@ -32,8 +32,8 @@ BeatAnalyzer::BeatAnalyzer(QObject *parent)
         finalizeAnalysis();
     });
 
-    connect(m_decoder, &QAudioDecoder::errorChanged, this, [this]() {
-        if (m_decoder->error() == QAudioDecoder::NoError) {
+    connect(m_decoder, &QAudioDecoder::error, this, [this](QAudioDecoder::Error error) {
+        if (error == QAudioDecoder::NoError) {
             return;
         }
         m_analyzing = false;
