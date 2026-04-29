@@ -21,6 +21,10 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     , m_allSongs()
     , m_artistMap()
     , m_albumMap()
+    , m_beatTimer(new QTimer(this))
+    , m_beatEffect(false)
+    , m_overlayAlpha(0.0f)
+    , m_beatAnim(new QPropertyAnimation(this, "overlayAlpha", this))
     , m_isDragging(false)
     , m_longPressTimer(new QTimer(this))
     , m_pressDirection(0)
@@ -39,6 +43,12 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
+    m_beatTimer->setInterval(500);
+    m_beatTimer->setSingleShot(false);
+    m_beatAnim->setDuration(200);
+    m_beatAnim->setStartValue(0.15f);
+    m_beatAnim->setEndValue(0.0f);
+    connect(m_beatTimer, &QTimer::timeout, this, &PlayWidget::onBeat);
 
     ui->slider_progress->setRange(0, 0);
     ui->lbl_currentTime->setText(QStringLiteral("00:00"));
@@ -47,16 +57,19 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     ui->btn_playPause->setText(QString());
     ui->btn_next->setText(QString());
     ui->btn_playMode->setText(QString());
+    ui->btn_beat->setText(QString());
     ui->btn_showList->setText(QString());
     ui->btn_prev->setIcon(QIcon(QStringLiteral(":/icons/icon/1previous.png")));
     ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
     ui->btn_next->setIcon(QIcon(QStringLiteral(":/icons/icon/4next.png")));
+    ui->btn_beat->setIcon(QIcon(QStringLiteral(":/icons/icon/9volume.png")));
     ui->btn_showList->setIcon(QIcon(QStringLiteral(":/icons/icon/10list.png")));
     const QSize iconSize(28, 28);
     ui->btn_prev->setIconSize(iconSize);
     ui->btn_playPause->setIconSize(iconSize);
     ui->btn_next->setIconSize(iconSize);
     ui->btn_playMode->setIconSize(iconSize);
+    ui->btn_beat->setIconSize(iconSize);
     ui->btn_showList->setIconSize(iconSize);
     setPlayModeIcon(m_controller->playMode());
     ui->lbl_index->setText(QStringLiteral("0/0"));
@@ -116,13 +129,27 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     connect(m_controller, &PlayerController::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState state) {
         if (state == QMediaPlayer::PlayingState) {
             ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/3pause.png")));
+            startBeatEffect();
         } else {
             ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
+            stopBeatEffect();
         }
     });
 
     connect(m_controller, &PlayerController::playModeChanged, this, [this](PlayMode mode) {
         setPlayModeIcon(mode);
+        switch (mode) {
+        case PlayMode::RandomPlay:
+            m_beatTimer->setInterval(400);
+            break;
+        case PlayMode::SingleLoop:
+            m_beatTimer->setInterval(600);
+            break;
+        case PlayMode::FolderLoop:
+        case PlayMode::AllLoop:
+            m_beatTimer->setInterval(500);
+            break;
+        }
     });
 
     connect(m_controller, &PlayerController::currentIndexChanged, this, [this](int) {
@@ -205,6 +232,9 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
         }
         m_controller->setPlayMode(nextMode);
     });
+    connect(ui->btn_beat, &QPushButton::clicked, this, [this]() {
+        setBeatEnabled(!m_beatEffect);
+    });
 
     connect(ui->slider_progress, &QSlider::sliderPressed, this, [this]() {
         m_isDragging = true;
@@ -273,6 +303,67 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
     }
+}
+
+void PlayWidget::startBeatEffect()
+{
+    if (!m_beatEffect) {
+        return;
+    }
+    if (!m_beatTimer->isActive()) {
+        m_beatTimer->start();
+    }
+}
+
+void PlayWidget::stopBeatEffect()
+{
+    m_beatTimer->stop();
+    m_beatAnim->stop();
+    m_overlayAlpha = 0.0f;
+    update();
+}
+
+void PlayWidget::onBeat()
+{
+    if (!m_beatEffect) {
+        return;
+    }
+
+    m_beatAnim->stop();
+    setOverlayAlpha(0.15f);
+    m_beatAnim->setStartValue(0.15f);
+    m_beatAnim->setEndValue(0.0f);
+    m_beatAnim->start();
+}
+
+void PlayWidget::setBeatEnabled(bool enabled)
+{
+    m_beatEffect = enabled;
+    ui->btn_beat->setStyleSheet(
+        enabled
+            ? QStringLiteral("background-color: rgba(255,255,255,40); border-radius: 28px;")
+            : QString()
+    );
+
+    if (!enabled) {
+        stopBeatEffect();
+        return;
+    }
+
+    if (m_controller->playbackState() == QMediaPlayer::PlayingState) {
+        startBeatEffect();
+    }
+}
+
+float PlayWidget::overlayAlpha() const
+{
+    return m_overlayAlpha;
+}
+
+void PlayWidget::setOverlayAlpha(float alpha)
+{
+    m_overlayAlpha = qBound(0.0f, alpha, 1.0f);
+    update();
 }
 
 void PlayWidget::setSearchContext(
@@ -481,6 +572,9 @@ void PlayWidget::paintEvent(QPaintEvent *event)
         painter.fillRect(rect(), QColor(10, 10, 20, 180));
     } else {
         painter.fillRect(rect(), QColor("#1a1a2e"));
+    }
+    if (m_beatEffect && m_overlayAlpha > 0.0f) {
+        painter.fillRect(rect(), QColor(255, 255, 255, static_cast<int>(m_overlayAlpha * 255.0f)));
     }
 
     QWidget::paintEvent(event);

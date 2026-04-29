@@ -3,6 +3,7 @@
 #include <QLabel>
 #include <QMap>
 #include <QPixmap>
+#include <QPropertyAnimation>
 #include <QTimer>
 #include <QWidget>
 
@@ -20,6 +21,7 @@ QT_END_NAMESPACE
 class PlayWidget : public QWidget
 {
     Q_OBJECT
+    Q_PROPERTY(float overlayAlpha READ overlayAlpha WRITE setOverlayAlpha)
 
 public:
     explicit PlayWidget(PlayerController *controller, QWidget *parent = nullptr);
@@ -43,6 +45,12 @@ private:
     void clearLrcLabels();
     void updateBackground(const QPixmap &pixmap);
     void updateIndexLabel();
+    void startBeatEffect();
+    void stopBeatEffect();
+    void onBeat();
+    void setBeatEnabled(bool enabled);
+    float overlayAlpha() const;
+    void setOverlayAlpha(float alpha);
 
     Ui::PlayWidget *ui;
     QPixmap m_bgPixmap;
@@ -55,6 +63,10 @@ private:
     QList<SongInfo> m_allSongs;
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;
+    QTimer *m_beatTimer;
+    bool m_beatEffect;
+    float m_overlayAlpha;
+    QPropertyAnimation *m_beatAnim;
     bool m_isDragging;
     QTimer *m_longPressTimer;
     int m_pressDirection;
