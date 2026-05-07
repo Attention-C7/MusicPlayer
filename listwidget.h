@@ -70,7 +70,7 @@ private:
     QList<SongInfo> m_allSongs;
     QMap<QString, QList<SongInfo>> m_albumMap;
     QMap<QString, QList<SongInfo>> m_artistMap;
-    int m_currentTab;  //当前选中 Tab 索引：0-全部、1-专辑、2-艺人、3-文件夹
+    int m_currentTab;  //当前选中 Tab：0=文件夹、1=专辑、2=艺人、3=全部（与 listwidget.cpp 中按钮切换一致）
     QString m_expandedGroup;  //当前展开的分组名称：用于「专辑」和「艺人」Tab 的折叠/展开状态。
     QStringList m_subDirs;  //当前目录下所有子目录路径列表。
     QList<SongInfo> m_currentSongs;  //当前目录下所有歌曲列表。
