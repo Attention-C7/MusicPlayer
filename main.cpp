@@ -2,9 +2,9 @@
 
 #include <QApplication>
 
-int main(int argc, char *argv[])
+int main(int argc, char *argv[])    //标准C++入口：argc/argv交给Qt解析
 {
-    QApplication app(argc, argv);
+    QApplication app(argc, argv);   //构造Qt应用程序对象，初始化事件循环、字体、样式等
     app.setStyleSheet(R"(
     QWidget {
         background-color: #1a1a2e;
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
         color: #888888;
     }
 )");
-    MusicPlayer w;
-    w.show();
-    return app.exec();
+    MusicPlayer w;  //创建音乐播放器窗口
+    w.show();   //显示音乐播放器窗口
+    return app.exec();  //进入事件循环，等待用户操作
 }
