@@ -548,6 +548,6 @@ void ListWidget::paintEvent(QPaintEvent *event)
     painter.setPen(Qt::NoPen);// 设置画笔为无色
     painter.setBrush(QColor(20, 20, 30, 210));// 设置画刷为深紫色
 
-    const QRectF bgRect = rect().adjusted(1.0, 1.0, -1.0, -1.0)// 缩小1像素，避免边缘被裁剪
+    const QRectF bgRect = rect().adjusted(1.0, 1.0, -1.0, -1.0); // 缩小1像素，避免边缘被裁剪
     painter.drawRoundedRect(bgRect, 12.0, 12.0);// 绘制圆角矩形
 }
