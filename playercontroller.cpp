@@ -24,9 +24,7 @@ PlayerController::PlayerController(QObject *parent)
         }
         seek(m_player->position() + static_cast<qint64>(m_seekDirection) * SeekStepMs); //长按 seek 步进，100ms 一次，每次步进 3000ms
     });
-    //直接把 QMediaPlayer::positionChanged 接到 PlayerController::positionChanged，UI 拿到的仍是 毫秒
-    connect(m_player, &QMediaPlayer::positionChanged, this, &PlayerController::positionChanged); //进度变化；PlayWidget 更新进度条。毫秒；驱动进度条与时间标签
-    //时长：播放器 durationChanged 时，若当前索引合法，把 m_playlist[m_currentIndex].duration 写成播放器给的时长，再 emit songChanged（让界面刷新「总时长」一类绑定在 SongInfo 上的展示），最后 emit durationChanged(duration)
+    connect(m_player, &QMediaPlayer::positionChanged, this, &PlayerController::positionChanged);
     connect(m_player, &QMediaPlayer::durationChanged, this, [this](qint64 duration) {
         if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
             m_playlist[m_currentIndex].duration = duration;
@@ -34,53 +32,95 @@ PlayerController::PlayerController(QObject *parent)
         }
         emit durationChanged(duration);
     });
-    //播放状态：播放器 playbackStateChanged 时，更新播放按钮图标等
     connect(m_player, &QMediaPlayer::playbackStateChanged, this, &PlayerController::playbackStateChanged);
-    //元数据：播放器 metaDataChanged 时，更新 SongInfo（与扫描阶段 TagLib 互补）
     connect(m_player, &QMediaPlayer::metaDataChanged, this, [this]() {
         updateSongMetaData();
     });
-    //播放结束：播放器 mediaStatusChanged 时，若播放结束，调用 handleEndOfMedia()
     connect(m_player, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus status) {
         if (status == QMediaPlayer::EndOfMedia) {
             handleEndOfMedia();
         }
     });
-    //播放错误：播放器 errorOccurred 时，弹窗提示用户
     connect(m_player, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error, const QString &errorString) {
         if (!errorString.isEmpty()) {
             emit errorOccurred(errorString);
         }
     });
 }
-//替换 主表 m_playlist；若为空则 m_currentIndex = -1 并 currentIndexChanged；若索引越界则收到 0。注意：不会自动播放，只修正索引边界。
+
 void PlayerController::setPlaylist(QList<SongInfo> songs)
 {
     m_playlist = songs;
     if (m_playlist.isEmpty()) {
         m_currentIndex = -1;
+        m_ctx = PlayContext{};
         emit currentIndexChanged(m_currentIndex);
-    } else if (m_currentIndex >= m_playlist.size()) {
+        return;
+    }
+    if (m_currentIndex >= m_playlist.size()) {
         m_currentIndex = 0;
         emit currentIndexChanged(m_currentIndex);
     }
-}   //只做赋值，不校验索引；供 ListWidget 在「当前文件夹 / 当前分组」上下文更新 prev/next/计数 时使用。
-//替换 目录表 m_folderPlaylist；不会自动播放，只替换表
-void PlayerController::setFolderPlaylist(QList<SongInfo> songs)
-{
-    m_folderPlaylist = songs;
+    // 仅替换全量表时：默认上下文为「全库」，避免 prev/next 见到空的 scopeList
+    m_ctx.scopeList = m_playlist;
+    m_ctx.source = PlayContext::All;
+    m_ctx.globalIndex = m_currentIndex;
+    m_ctx.scopeIndex =
+        (m_currentIndex >= 0 && m_currentIndex < m_ctx.scopeList.size()) ? m_currentIndex : -1;
+
+    /*
+    // ——— 旧实现（三张表）：仅替换主表，folder/group 由其它入口单独设置 ———
+    void PlayerController::setPlaylist(QList<SongInfo> songs)
+    {
+        m_playlist = songs;
+        if (m_playlist.isEmpty()) {
+            m_currentIndex = -1;
+            emit currentIndexChanged(m_currentIndex);
+        } else if (m_currentIndex >= m_playlist.size()) {
+            m_currentIndex = 0;
+            emit currentIndexChanged(m_currentIndex);
+        }
+    }
+    */
 }
-//替换 艺人表 m_groupPlaylist；不会自动播放，只替换表
-void PlayerController::setGroupPlaylist(QList<SongInfo> songs)
+
+void PlayerController::setContext(PlayContext ctx)
 {
-    m_groupPlaylist = songs;
+    const int oldIndex = m_currentIndex;
+    m_ctx = std::move(ctx);
+
+    if (!m_playlist.isEmpty()) {
+        if (m_ctx.globalIndex >= 0 && m_ctx.globalIndex < m_playlist.size()) {
+            m_currentIndex = m_ctx.globalIndex;
+        } else if (m_ctx.scopeIndex >= 0 && m_ctx.scopeIndex < m_ctx.scopeList.size()) {
+            const QString path = m_ctx.scopeList[m_ctx.scopeIndex].filePath;
+            int gi = -1;
+            for (int i = 0; i < m_playlist.size(); ++i) {
+                if (m_playlist[i].filePath == path) {
+                    gi = i;
+                    break;
+                }
+            }
+            m_ctx.globalIndex = gi;
+            m_currentIndex = gi;
+        }
+    }
+
+    if (m_currentIndex != oldIndex) {
+        emit currentIndexChanged(m_currentIndex);
+    }
 }
-//统一入口：设置媒体源、更新索引、发 songChanged、加载歌词等
+
+PlayContext PlayerController::currentContext() const
+{
+    return m_ctx;
+}
+
 void PlayerController::playSong(int index)
 {
     playByIndex(index);
 }
-//播放/暂停：若无曲目则返回；若索引越界则收到 0；若播放中则暂停，否则播放
+
 void PlayerController::playPause()
 {
     if (m_playlist.isEmpty()) {
@@ -101,60 +141,27 @@ void PlayerController::playPause()
 
 void PlayerController::prev()
 {
-    if (m_playlist.isEmpty()) { //歌单为空 → 直接返回
+    if (m_playlist.isEmpty()) {
         return;
     }
-    //根据播放模式，决定当前使用哪个歌单:优先级：AllLoop → 分组歌单 → 文件夹歌单 → 总歌单
-    const QList<SongInfo> &activeList = (m_playMode == PlayMode::AllLoop) //当前播放模式决定激活列表
-                                            ? m_playlist
-                                            : (!m_groupPlaylist.isEmpty() ? m_groupPlaylist
-                                                                          : (!m_folderPlaylist.isEmpty() ? m_folderPlaylist
-                                                                                                         : m_playlist));
-    if (activeList.isEmpty()) { // 有效列表为空 → 返回
-        return;
-    }
-    
-    QString currentFilePath; //当前播放文件路径
-    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
-        currentFilePath = m_playlist[m_currentIndex].filePath;
-    } else {
-        currentFilePath = activeList.first().filePath;
-    }
-    //在 activeList 里找到当前歌曲的位置 currentActiveIndex
-    int currentActiveIndex = -1;
-    for (int i = 0; i < activeList.size(); ++i) {
-        if (activeList[i].filePath == currentFilePath) {
-            currentActiveIndex = i;
-            break;
-        }
-    }
-    if (currentActiveIndex < 0) { // 找不到 → 从头开始
-        currentActiveIndex = 0;
-    }
-    //随机播放：若当前模式为随机播放，且歌单长度大于1，则随机选择一首歌播放
-    if (m_playMode == PlayMode::RandomPlay && activeList.size() > 1) {
-        int randomActiveIndex = currentActiveIndex;
-        while (randomActiveIndex == currentActiveIndex) {
-            randomActiveIndex = QRandomGenerator::global()->bounded(activeList.size());
-        }
-        const QString targetPath = activeList[randomActiveIndex].filePath;
-        for (int i = 0; i < m_playlist.size(); ++i) {// 在总歌单里找到对应歌曲并播放
-            if (m_playlist[i].filePath == targetPath) {
-                playByIndex(i);
-                return;
-            }
-        }
-        return;
-    }
-    // 正常播放：若当前模式为非随机播放，则按顺序播放上一首。若当前歌曲为第一首，则播放最后一首
-    const int prevActiveIndex = (currentActiveIndex <= 0) ? (activeList.size() - 1) : (currentActiveIndex - 1);
-    const QString targetPath = activeList[prevActiveIndex].filePath;
-    for (int i = 0; i < m_playlist.size(); ++i) {
-        if (m_playlist[i].filePath == targetPath) {
-            playByIndex(i);
+    navigate(-1);
+
+    /*
+    // ——— 旧 prev：按 PlayMode 选 activeList（All / group / folder），再路径映射回 m_playlist ———
+    void PlayerController::prev()
+    {
+        if (m_playlist.isEmpty()) {
             return;
         }
+        const QList<SongInfo> &activeList = (m_playMode == PlayMode::AllLoop)
+                                                ? m_playlist
+                                                : (!m_groupPlaylist.isEmpty() ? m_groupPlaylist
+                                                                              : (!m_folderPlaylist.isEmpty()
+                                                                                     ? m_folderPlaylist
+                                                                                     : m_playlist));
+        ...
     }
+    */
 }
 
 void PlayerController::next()
@@ -162,49 +169,52 @@ void PlayerController::next()
     if (m_playlist.isEmpty()) {
         return;
     }
+    navigate(1);
 
-    const QList<SongInfo> &activeList = (m_playMode == PlayMode::AllLoop)
-                                            ? m_playlist
-                                            : (!m_groupPlaylist.isEmpty() ? m_groupPlaylist
-                                                                          : (!m_folderPlaylist.isEmpty() ? m_folderPlaylist
-                                                                                                         : m_playlist));
-    if (activeList.isEmpty()) {
+    /*
+    // ——— 旧 next：同上 ———
+    */
+}
+
+void PlayerController::navigate(int delta)
+{
+    if (m_playlist.isEmpty() || m_ctx.scopeList.isEmpty()) {
         return;
     }
 
-    QString currentFilePath;
-    if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
-        currentFilePath = m_playlist[m_currentIndex].filePath;
-    } else {
-        currentFilePath = activeList.first().filePath;
-    }
-
-    int currentActiveIndex = -1;
-    for (int i = 0; i < activeList.size(); ++i) {
-        if (activeList[i].filePath == currentFilePath) {
-            currentActiveIndex = i;
-            break;
+    const int n = m_ctx.scopeList.size();
+    int scopePos = m_ctx.scopeIndex;
+    if (scopePos < 0 || scopePos >= n) {
+        QString path;
+        if (m_currentIndex >= 0 && m_currentIndex < m_playlist.size()) {
+            path = m_playlist[m_currentIndex].filePath;
         }
-    }
-
-    if (m_playMode == PlayMode::RandomPlay && activeList.size() > 1) {
-        int randomActiveIndex = currentActiveIndex;
-        while (randomActiveIndex == currentActiveIndex) {
-            randomActiveIndex = QRandomGenerator::global()->bounded(activeList.size());
-        }
-        const QString targetPath = activeList[randomActiveIndex].filePath;
-        for (int i = 0; i < m_playlist.size(); ++i) {
-            if (m_playlist[i].filePath == targetPath) {
-                playByIndex(i);
-                return;
+        scopePos = 0;
+        for (int i = 0; i < n; ++i) {
+            if (m_ctx.scopeList[i].filePath == path) {
+                scopePos = i;
+                break;
             }
         }
-        return;
     }
 
-    const int nextActiveIndex =
-        (currentActiveIndex < 0 || currentActiveIndex >= activeList.size() - 1) ? 0 : (currentActiveIndex + 1);
-    const QString targetPath = activeList[nextActiveIndex].filePath;
+    int newScopeIndex = scopePos;
+    if (m_playMode == PlayMode::RandomPlay && n > 1) {
+        while (newScopeIndex == scopePos) {
+            newScopeIndex = QRandomGenerator::global()->bounded(n);
+        }
+    } else {
+        if (delta == 0) {
+            return;
+        }
+        newScopeIndex = scopePos + delta;
+        newScopeIndex %= n;
+        if (newScopeIndex < 0) {
+            newScopeIndex += n;
+        }
+    }
+
+    const QString targetPath = m_ctx.scopeList[newScopeIndex].filePath;
     for (int i = 0; i < m_playlist.size(); ++i) {
         if (m_playlist[i].filePath == targetPath) {
             playByIndex(i);
@@ -212,96 +222,73 @@ void PlayerController::next()
         }
     }
 }
-// 跳转到指定播放位置（进度条拖动时调用）：夹紧到 duration 范围内
+
 void PlayerController::seek(qint64 position)
 {
-    qint64 maxDuration = m_player->duration(); //获取当前歌曲时长
-    if (maxDuration < 0) { //如果时长无效（未加载完成），强制设为 0
-        maxDuration = 0; //时长为负 → 0
+    qint64 maxDuration = m_player->duration();
+    if (maxDuration < 0) {
+        maxDuration = 0;
     }
-    const qint64 clampedPosition = qBound<qint64>(0, position, maxDuration); //夹紧到 duration 范围内
+    const qint64 clampedPosition = qBound<qint64>(0, position, maxDuration);
     m_player->setPosition(clampedPosition);
 }
-// 设置播放模式（顺序、单曲循环、列表循环、随机等）：若与当前模式相同则返回；否则更新 m_playMode 并 emit playModeChanged
+
 void PlayerController::setPlayMode(PlayMode mode)
 {
     if (m_playMode == mode) {
         return;
     }
-    m_playMode = mode; //更新播放模式
-    emit playModeChanged(m_playMode); //发出播放模式变化信号，让界面更新循环模式按钮图标
+    m_playMode = mode;
+    emit playModeChanged(m_playMode);
 }
-// 当前曲目索引
+
 int PlayerController::currentIndex() const
 {
     return m_currentIndex;
 }
-// 当前目录索引：若目录表为空或当前索引无效则 -1；否则在目录表里找到当前歌曲的位置
-int PlayerController::folderIndex() const
-{
-    if (m_folderPlaylist.isEmpty()) {
-        return -1;
-    }
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
-        return -1;
-    }
 
-    const QString currentPath = m_playlist[m_currentIndex].filePath;
-    for (int i = 0; i < m_folderPlaylist.size(); ++i) {
-        if (m_folderPlaylist[i].filePath == currentPath) {
-            return i;
-        }
-    }
-    return -1;
-}
-// 当前艺人索引：若艺人表为空或当前索引无效则 -1；否则在艺人表里找到当前歌曲的位置
-int PlayerController::groupIndex() const
+int PlayerController::currentScopeIndex() const
 {
-    if (m_groupPlaylist.isEmpty()) {
-        return -1;
-    }
-    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
-        return -1;
-    }
-
-    const QString currentPath = m_playlist[m_currentIndex].filePath;    //获取当前正在播放的歌曲路径
-    for (int i = 0; i < m_groupPlaylist.size(); ++i) {    //在【分组歌单 m_groupPlaylist】里遍历查找
-        if (m_groupPlaylist[i].filePath == currentPath) {
-            return i;
-        }
-    }
-    return -1;
+    return m_ctx.scopeIndex;
 }
-// 总歌单歌曲数：直接返回 m_playlist.size()
+
 int PlayerController::playlistCount() const
 {
     return m_playlist.size();
 }
-// 当前激活的播放列表歌曲数：根据播放模式决定使用哪个歌单
+
 int PlayerController::activePlaylistCount() const
 {
-    if (m_playMode == PlayMode::AllLoop) {
+    return m_ctx.scopeList.size();
+
+    /*
+    // ——— 旧 activePlaylistCount：按 PlayMode 与 folder/group 是否非空分叉 ———
+    int PlayerController::activePlaylistCount() const
+    {
+        if (m_playMode == PlayMode::AllLoop) {
+            return m_playlist.size();
+        }
+        if (!m_groupPlaylist.isEmpty()) {
+            return m_groupPlaylist.size();
+        }
+        if (!m_folderPlaylist.isEmpty()) {
+            return m_folderPlaylist.size();
+        }
         return m_playlist.size();
     }
-    if (!m_groupPlaylist.isEmpty()) {
-        return m_groupPlaylist.size();
-    }
-    if (!m_folderPlaylist.isEmpty()) {
-        return m_folderPlaylist.size();
-    }
-    return m_playlist.size();
+    */
 }
-//返回当前播放模式
+
 PlayMode PlayerController::playMode() const
 {
     return m_playMode;
 }
-//返回播放器正在播放 / 暂停 / 停止的状态
+
 QMediaPlayer::PlaybackState PlayerController::playbackState() const
 {
     return m_player->playbackState();
 }
-//开始向前seek：设置 m_seekDirection = 1，启动定时器
+
 void PlayerController::startSeekForward()
 {
     m_seekDirection = 1;
@@ -309,7 +296,7 @@ void PlayerController::startSeekForward()
         m_seekTimer->start();
     }
 }
-//停止向前seek：若 m_seekDirection = 1，则设置 m_seekDirection = 0，停止定时器
+
 void PlayerController::stopSeekForward()
 {
     if (m_seekDirection == 1) {
@@ -317,7 +304,7 @@ void PlayerController::stopSeekForward()
         m_seekTimer->stop();
     }
 }
-//开始向后seek：设置 m_seekDirection = -1，启动定时器
+
 void PlayerController::startSeekBackward()
 {
     m_seekDirection = -1;
@@ -325,7 +312,7 @@ void PlayerController::startSeekBackward()
         m_seekTimer->start();
     }
 }
-//停止向后seek：若 m_seekDirection = -1，则设置 m_seekDirection = 0，停止定时器
+
 void PlayerController::stopSeekBackward()
 {
     if (m_seekDirection == -1) {
@@ -333,7 +320,7 @@ void PlayerController::stopSeekBackward()
         m_seekTimer->stop();
     }
 }
-// 根据【总歌单索引】播放指定歌曲
+
 void PlayerController::playByIndex(int index)
 {
     if (index < 0 || index >= m_playlist.size()) {
@@ -341,38 +328,45 @@ void PlayerController::playByIndex(int index)
     }
 
     m_currentIndex = index;
-    emit currentIndexChanged(m_currentIndex);// 通知UI：当前歌曲索引变了
-    emit songChanged(m_playlist[m_currentIndex]);// 通知UI：当前歌曲变了
-    //设置媒体源：把当前歌曲路径转换为 QUrl，并设置给播放器
+    m_ctx.globalIndex = index;
+    const QString path = m_playlist[m_currentIndex].filePath;
+    m_ctx.scopeIndex = -1;
+    for (int i = 0; i < m_ctx.scopeList.size(); ++i) {
+        if (m_ctx.scopeList[i].filePath == path) {
+            m_ctx.scopeIndex = i;
+            break;
+        }
+    }
+
+    emit currentIndexChanged(m_currentIndex);
+    emit songChanged(m_playlist[m_currentIndex]);
     const QUrl source = QUrl::fromLocalFile(m_playlist[m_currentIndex].filePath);
     m_player->setSource(source);
-    m_player->play();   //播放
-    loadLrc(m_playlist[m_currentIndex]);//加载歌词
+    m_player->play();
+    loadLrc(m_playlist[m_currentIndex]);
 }
-// 加载歌词：若歌词文件路径为空，则清空歌词并返回；否则解析歌词文件，生成时间轴映射，并 emit lrcLoaded
+
 void PlayerController::loadLrc(const SongInfo &song)
-{   //若歌词文件路径为空，则清空歌词并返回
+{
     if (song.lrcPath.isEmpty()) {
         emit lrcLoaded(QMap<qint64, QString>());
         return;
     }
-    //解析歌词文件，生成时间轴映射。调用解析器，解析 .lrc 文件
     const QMap<qint64, QString> result = LrcParser::parse(song.lrcPath);
-    emit lrcLoaded(result);    //发送解析好的歌词给 UI 显示
+    emit lrcLoaded(result);
 }
-// 从播放器读取歌曲元数据（标题、歌手、专辑、封面），更新到歌曲信息并通知界面
+
 void PlayerController::updateSongMetaData()
 {
     if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
         return;
     }
-    //获取当前正在播放的歌曲（引用，直接修改原数据）
     SongInfo &song = m_playlist[m_currentIndex];
-    const QMediaMetaData metaData = m_player->metaData();//从播放器获取媒体元数据
-    
-    const QString title = metaData.value(QMediaMetaData::Title).toString().trimmed();//获取标题
+    const QMediaMetaData metaData = m_player->metaData();
+
+    const QString title = metaData.value(QMediaMetaData::Title).toString().trimmed();
     const QVariant artistValue = metaData.value(QMediaMetaData::ContributingArtist);
-    QString artist;// 读取 歌手（兼容多种格式）
+    QString artist;
     if (artistValue.canConvert<QStringList>()) {
         artist = artistValue.toStringList().join(", ").trimmed();
     } else {
@@ -389,7 +383,6 @@ void PlayerController::updateSongMetaData()
     if (!album.isEmpty()) {
         song.album = album;
     }
-    // 读取 专辑封面（优先缩略图，再封面大图）
     QPixmap albumArt;
     const QVariant thumbnailValue = metaData.value(QMediaMetaData::ThumbnailImage);
     if (thumbnailValue.canConvert<QPixmap>()) {
@@ -397,7 +390,6 @@ void PlayerController::updateSongMetaData()
     } else if (thumbnailValue.canConvert<QImage>()) {
         albumArt = QPixmap::fromImage(qvariant_cast<QImage>(thumbnailValue));
     }
-    // 缩略图为空，再读封面图
     if (albumArt.isNull()) {
         const QVariant coverValue = metaData.value(QMediaMetaData::CoverArtImage);
         if (coverValue.canConvert<QPixmap>()) {
@@ -406,45 +398,64 @@ void PlayerController::updateSongMetaData()
             albumArt = QPixmap::fromImage(qvariant_cast<QImage>(coverValue));
         }
     }
-    // 发送信号，通知 UI 全部更新
     emit albumArtChanged(albumArt);
     emit songChanged(song);
     emit playlistMetaUpdated(m_currentIndex, song);
 }
 
-int PlayerController::randomIndexExcludingCurrent() const
-{
-    if (m_playlist.isEmpty()) {
-        return -1;
-    }
-    if (m_playlist.size() == 1) {//如果歌单里只有1首歌 → 只能返回 0
-        return 0;
-    }
-    // 随机选择一首歌，排除当前歌曲
-    int index = m_currentIndex; //初始化 index 为当前索引（目的：强制进入循环）
-    while (index == m_currentIndex) {
-        index = QRandomGenerator::global()->bounded(m_playlist.size()); //随机生成一个索引，排除当前歌曲
-    }
-    return index;
-}
-// 当一首歌【完全播放完毕】时自动调用
 void PlayerController::handleEndOfMedia()
 {
     if (m_playlist.isEmpty() || m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
         return;
     }
-    // 根据播放模式，决定下一首歌的处理方式
+
     switch (m_playMode) {
     case PlayMode::SingleLoop:
-        m_player->setPosition(0); //单曲循环：从头开始播放，进度回到 0 毫秒
+        m_player->setPosition(0);
         m_player->play();
         break;
     case PlayMode::FolderLoop:
     case PlayMode::AllLoop:
-        next();
-        break;
-    case PlayMode::RandomPlay://随机播放：播放完 → 自动下一曲（next内部会随机）
-        next();
+    case PlayMode::RandomPlay:
+        navigate(1);
         break;
     }
 }
+
+/*
+// ——— 旧 handleEndOfMedia：SingleLoop 外 FolderLoop/AllLoop/RandomPlay 均走 next() ———
+*/
+
+/*
+int PlayerController::randomIndexExcludingCurrent() const
+{
+    if (m_playlist.isEmpty()) {
+        return -1;
+    }
+    if (m_playlist.size() == 1) {
+        return 0;
+    }
+    int index = m_currentIndex;
+    while (index == m_currentIndex) {
+        index = QRandomGenerator::global()->bounded(m_playlist.size());
+    }
+    return index;
+}
+*/
+
+/*
+// ——— 旧 folderIndex / groupIndex ———
+int PlayerController::folderIndex() const { ... }
+int PlayerController::groupIndex() const { ... }
+*/
+
+/*
+void PlayerController::setFolderPlaylist(QList<SongInfo> songs)
+{
+    m_folderPlaylist = songs;
+}
+void PlayerController::setGroupPlaylist(QList<SongInfo> songs)
+{
+    m_groupPlaylist = songs;
+}
+*/

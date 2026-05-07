@@ -36,6 +36,9 @@ public:
         QMap<QString, QList<SongInfo>> albumMap
     );
 
+signals:
+    void playRequested(const QString &filePath);  //search 命中后请求按绝对路径播放；由 MusicPlayer 接到 ListWidget::playFromPath
+
 private:
     void toggleExpanded();
     void handleCommand(const QString &cmd, const QString &param);

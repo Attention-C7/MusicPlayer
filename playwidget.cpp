@@ -582,15 +582,15 @@ void PlayWidget::paintEvent(QPaintEvent *event)
 
 void PlayWidget::updateIndexLabel()
 {
-    int index = -1;
-    if (m_controller->playMode() == PlayMode::AllLoop) {
-        index = m_controller->currentIndex();
-    } else {
-        const int groupIdx = m_controller->groupIndex();
-        index = (groupIdx >= 0) ? groupIdx : m_controller->folderIndex();
-    }
-    const int total = m_controller->activePlaylistCount();
+    const PlayContext ctx = m_controller->currentContext();
+    const int scope = ctx.scopeIndex + 1;
+    const int total = ctx.scopeList.size();
+    ui->lbl_index->setText(QStringLiteral("%1/%2").arg(scope).arg(total));
 
+    /*
+    const int index = m_controller->currentScopeIndex();
+    const int totOld = m_controller->activePlaylistCount();
     const int displayIndex = (index >= 0) ? (index + 1) : 0;
-    ui->lbl_index->setText(QStringLiteral("%1/%2").arg(displayIndex).arg(total));
+    ui->lbl_index->setText(QStringLiteral("%1/%2").arg(displayIndex).arg(totOld));
+    */
 }

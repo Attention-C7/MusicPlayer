@@ -30,6 +30,10 @@ public:
     void setRootPath(const QString &path);  //设置根目录：设置扫描/浏览根目录（musicplayer.cpp 里用 QDir::homePath() + "/Music" 等）。
     void refreshList();  //刷新列表：扫描/刷新当前路径下所有文件，更新 m_allSongs、m_albumMap、m_artistMap，并 emit searchContextUpdated 信号。
 
+    /// 统一播放入口：设全量表 + PlayContext + 播放 + 请求返回播放页（语音检索等外部入口可复用）。
+    void playFromContext(QList<SongInfo> scope, int indexInScope, PlayContext::Source source);
+    void playFromPath(const QString &filePath);  //按全量表路径播放（语音 search 经 MusicPlayer 转接）
+
 signals:
     void backToPlayerRequested();  //用户点「返回」时由 ListWidget emit，MusicPlayer 收到后执行 hideList()，从而列表页不直接操作播放页几何，只发「请求」，降低与主窗口布局的耦合。
     void requestScan(QString rootPath);  //扫描请求：由 startBackgroundScan() 触发，传入根目录路径。
@@ -52,7 +56,8 @@ private:
     void updateCurrentPathLabel();   //更新当前路径标签：显示当前扫描/浏览的目录路径。与 main.cpp 里 lbl_currentPath 的 QSS 对应
     void updatePlayingHighlight();   //高亮当前播放曲：根据 m_currentPlayingFilePath 更新列表项颜色。
     void handleItemClicked(QListWidgetItem *item);   //处理单曲点击：根据 item 类型（文件/文件夹/分组）调用不同处理逻辑。
-    void buildGroupMaps();   //构建分组映射：根据 m_allSongs 构建 m_albumMap 和 m_artistMap，供语音/AI 在「当前扫描结果」里检索。
+    void buildGroupMaps();   //构建分组映射：根据 m_allSongs 构建 m_albumMap、m_artistMap、m_dirSongsMap，并重建 m_dirSubdirsMap（扫描完成后一次性）。
+    void rebuildDirSubdirsMap();   //自 m_rootPath BFS：填充 m_dirSubdirsMap（dir → FileScanner::scanSubDirs）。
     void refreshGroupList(int tab);   //刷新分组列表：根据 m_currentTab 刷新 m_albumMap 或 m_artistMap。
     void refreshAllSongsList();   //刷新全量列表：刷新 m_allSongs 列表，并 emit searchContextUpdated 信号。「全部」Tab 平铺 m_allSongs。
     void handleGroupItemClicked(QListWidgetItem *item);   //处理分组点击：根据 item 类型（文件/文件夹/分组）调用不同处理逻辑。
@@ -70,6 +75,8 @@ private:
     QList<SongInfo> m_allSongs;
     QMap<QString, QList<SongInfo>> m_albumMap;
     QMap<QString, QList<SongInfo>> m_artistMap;
+    QMap<QString, QList<SongInfo>> m_dirSongsMap;   // 规范化绝对目录路径 → 该目录下直接子音频文件（扫描完成后构建）
+    QMap<QString, QStringList> m_dirSubdirsMap;     // 规范化绝对目录路径 → 子目录列表（与 FileScanner::scanSubDirs 一致）
     int m_currentTab;  //当前选中 Tab：0=文件夹、1=专辑、2=艺人、3=全部（与 listwidget.cpp 中按钮切换一致）
     QString m_expandedGroup;  //当前展开的分组名称：用于「专辑」和「艺人」Tab 的折叠/展开状态。
     QStringList m_subDirs;  //当前目录下所有子目录路径列表。

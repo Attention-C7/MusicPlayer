@@ -7,6 +7,7 @@
 #include <QListWidgetItem>   //列表项，用于显示文件/文件夹/分组：数据绑定、类型识别、样式设置等
 #include <QPainter>
 #include <QPaintEvent>
+#include <QQueue>   //BFS 构建 m_dirSubdirsMap
 #include <QSet>   //集合，用于存储访问过的文件路径：去重与查找
 #include <QVariant>   //变体，用于存储列表项数据：类型安全的数据容器
 
@@ -81,7 +82,8 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     connect(m_controller, &PlayerController::currentIndexChanged, this, [this](int) {
         updatePlayingHighlight();
     });
-    // 播放模式改变 → 自动切换页面
+    // 播放模式与 Tab 解耦：不再随 playModeChanged 自动切换文件夹/全部页（仅用户点击 Tab 切换）。
+    /*
     connect(m_controller, &PlayerController::playModeChanged, this, [this](PlayMode mode) {
         if (mode == PlayMode::AllLoop) {
             m_currentTab = 3;
@@ -91,6 +93,7 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
             refreshList();
         }
     });
+    */
     // 播放列表元数据更新时 → 同步更新当前歌曲信息
     connect(m_controller, &PlayerController::playlistMetaUpdated, this, [this](int index, const SongInfo &info) {
         bool updated = false;//先用 index 找（最快）
@@ -170,16 +173,19 @@ void ListWidget::refreshList()
         updateCurrentPathLabel();
         return;
     }
-    // 扫描当前路径下所有子目录
+    const QString currentDir = QDir::cleanPath(QDir(m_currentPath).absolutePath());
+    m_currentSongs = m_dirSongsMap.value(currentDir);
+    m_subDirs = m_dirSubdirsMap.value(currentDir);
+    /*
     m_subDirs = FileScanner::scanSubDirs(m_currentPath);
-    m_currentSongs.clear(); //筛选出【当前文件夹内的歌曲】
-    const QString currentDir = QDir::cleanPath(QDir(m_currentPath).absolutePath()); //当前文件夹的绝对路径
-    for (const SongInfo &song : m_allSongs) { //遍历所有歌曲
-        const QString parentDir = QDir::cleanPath(QFileInfo(song.filePath).dir().absolutePath()); //歌曲所在文件夹的绝对路径
-        if (parentDir == currentDir) { //如果歌曲所在文件夹的绝对路径与当前文件夹的绝对路径相同，则加入当前文件夹的歌曲列表
-            m_currentSongs.append(song); //加入当前文件夹的歌曲列表
+    m_currentSongs.clear();
+    for (const SongInfo &song : m_allSongs) {
+        const QString parentDir = QDir::cleanPath(QFileInfo(song.filePath).dir().absolutePath());
+        if (parentDir == currentDir) {
+            m_currentSongs.append(song);
         }
     }
+    */
 
     ui->listWidget_files->clear(); //清空列表
     // 显示【当前文件夹内的子目录】
@@ -289,23 +295,17 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
     if (type != FileItem) {//点击的不是【歌曲】→ 直接返回
         return;
     }
-    //点击的是【歌曲】（全部歌曲页 tab3）
     if (m_currentTab == 3) {
-        m_controller->setPlaylist(m_allSongs);// 设置全量播放列表
-        m_controller->setGroupPlaylist(QList<SongInfo>());// 清空艺人播放列表
-        m_controller->setFolderPlaylist(m_allSongs);// 设置当前文件夹播放列表
-
-        int targetIndex = -1;// 找到目标歌曲索引
-        for (int i = 0; i < m_allSongs.size(); ++i) {// 遍历所有歌曲
-            if (m_allSongs[i].filePath == path) {// 如果歌曲路径与当前点击路径相同，则找到目标歌曲索引
-                targetIndex = i;// 找到目标歌曲索引
+        int targetIndex = -1;
+        for (int i = 0; i < m_allSongs.size(); ++i) {
+            if (m_allSongs[i].filePath == path) {
+                targetIndex = i;
                 break;
             }
         }
-        if (targetIndex >= 0) {// 如果找到目标歌曲索引，则播放目标歌曲
-            m_controller->playSong(targetIndex);
+        if (targetIndex >= 0) {
+            playFromContext(m_allSongs, targetIndex, PlayContext::All);
         }
-        emit backToPlayerRequested();// 返回播放器界面
         return;
     }
     // 如果当前播放歌曲路径与当前点击路径相同，则直接返回
@@ -314,30 +314,25 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
         return;
     }
     //点击【文件夹内的歌曲】（普通播放）
-    m_controller->setPlayMode(PlayMode::FolderLoop);// 设置播放模式为文件夹循环
-    m_controller->setGroupPlaylist(QList<SongInfo>());// 清空艺人播放列表
-    m_controller->setFolderPlaylist(m_currentSongs);// 设置当前文件夹播放列表
-    m_controller->setPlaylist(m_allSongs);// 设置全量播放列表
+    m_controller->setPlayMode(PlayMode::FolderLoop);
 
-    int targetIndex = -1;// 找到目标歌曲索引
-    for (int i = 0; i < m_allSongs.size(); ++i) {// 遍历所有歌曲
-        if (m_allSongs[i].filePath == path) {// 如果歌曲路径与当前点击路径相同，则找到目标歌曲索引
-            targetIndex = i;// 找到目标歌曲索引
+    int folderSongIndex = -1;
+    for (int i = 0; i < m_currentSongs.size(); ++i) {
+        if (m_currentSongs[i].filePath == path) {
+            folderSongIndex = i;
             break;
         }
     }
-
-    if (targetIndex >= 0) {// 如果找到目标歌曲索引，则播放目标歌曲
-        m_controller->playSong(targetIndex);
+    if (folderSongIndex >= 0) {
+        playFromContext(m_currentSongs, folderSongIndex, PlayContext::Folder);
     }
-
-    emit backToPlayerRequested();// 返回播放器界面
 }
 // 构建分组映射：按【专辑】和【歌手】分类所有歌曲
 void ListWidget::buildGroupMaps()
 {
     m_albumMap.clear();// 清空专辑映射
     m_artistMap.clear();// 清空艺人映射
+    m_dirSongsMap.clear();
     QSet<QString> visitedPaths;// 已访问路径集合，防止重复歌曲（去重）
     // 遍历所有歌曲
     for (const SongInfo &song : m_allSongs) {
@@ -357,8 +352,75 @@ void ListWidget::buildGroupMaps()
 
         m_albumMap[album].append(song); // 将这首歌加入专辑映射
         m_artistMap[artist].append(song); // 将这首歌加入艺人映射
+
+        const QString dir = QDir::cleanPath(QFileInfo(song.filePath).dir().absolutePath());
+        m_dirSongsMap[dir].append(song);
+    }
+    rebuildDirSubdirsMap();
+}
+
+void ListWidget::rebuildDirSubdirsMap()
+{
+    m_dirSubdirsMap.clear();
+    if (m_rootPath.isEmpty()) {
+        return;
+    }
+    QQueue<QString> queue;
+    QSet<QString> visited;
+    const QString cleanRoot = QDir::cleanPath(m_rootPath);
+    queue.enqueue(cleanRoot);
+    visited.insert(cleanRoot);
+    while (!queue.isEmpty()) {
+        const QString dir = queue.dequeue();
+        const QStringList subs = FileScanner::scanSubDirs(dir);
+        m_dirSubdirsMap.insert(dir, subs);
+        for (const QString &sub : subs) {
+            const QString cleanSub = QDir::cleanPath(sub);
+            if (!visited.contains(cleanSub)) {
+                visited.insert(cleanSub);
+                queue.enqueue(cleanSub);
+            }
+        }
     }
 }
+
+void ListWidget::playFromPath(const QString &filePath)
+{
+    for (int i = 0; i < m_allSongs.size(); ++i) {
+        if (m_allSongs[i].filePath == filePath) {
+            playFromContext(m_allSongs, i, PlayContext::All);
+            return;
+        }
+    }
+}
+
+void ListWidget::playFromContext(QList<SongInfo> scope, int indexInScope, PlayContext::Source source)
+{
+    if (indexInScope < 0 || indexInScope >= scope.size() || m_allSongs.isEmpty()) {
+        return;
+    }
+    const QString songPath = scope.at(indexInScope).filePath;
+    int globalIndex = -1;
+    for (int i = 0; i < m_allSongs.size(); ++i) {
+        if (m_allSongs[i].filePath == songPath) {
+            globalIndex = i;
+            break;
+        }
+    }
+    if (globalIndex < 0) {
+        return;
+    }
+    PlayContext ctx;
+    ctx.scopeList = std::move(scope);
+    ctx.scopeIndex = indexInScope;
+    ctx.source = source;
+    ctx.globalIndex = globalIndex;
+    m_controller->setPlaylist(m_allSongs);
+    m_controller->setContext(ctx);
+    m_controller->playSong(globalIndex);
+    emit backToPlayerRequested();
+}
+
 // 刷新分组列表（专辑 tab1 / 歌手 tab2）
 void ListWidget::refreshGroupList(int tab)
 {
@@ -474,20 +536,16 @@ void ListWidget::handleGroupItemClicked(QListWidgetItem *item)
         emit backToPlayerRequested();
         return;
     }
-    // 播放当前分组内的歌曲
-    m_controller->setGroupPlaylist(groupSongs);// 设置【分组播放列表】
-    m_controller->setPlaylist(m_allSongs);// 设置【全量播放列表】
-    int targetIndex = -1;// 找到目标歌曲索引
-    for (int i = 0; i < m_allSongs.size(); ++i) {// 遍历所有歌曲
-        if (m_allSongs[i].filePath == filePath) {// 如果歌曲路径与当前点击路径相同，则找到目标歌曲索引
-            targetIndex = i;// 找到目标歌曲索引
+    int scopeSongIndex = -1;
+    for (int i = 0; i < groupSongs.size(); ++i) {
+        if (groupSongs[i].filePath == filePath) {
+            scopeSongIndex = i;
             break;
         }
     }
-    if (targetIndex >= 0) {// 如果找到目标歌曲索引，则播放目标歌曲
-        m_controller->playSong(targetIndex);
+    if (scopeSongIndex >= 0) {
+        playFromContext(groupSongs, scopeSongIndex, PlayContext::Group);
     }
-    emit backToPlayerRequested();// 返回播放器界面
 }
 // 启动后台线程扫描音乐
 void ListWidget::startBackgroundScan()
@@ -502,6 +560,8 @@ void ListWidget::startBackgroundScan()
 
     m_scanReady = false;// 设置扫描准备状态为false
     m_allSongs.clear();// 清空全量歌曲列表
+    m_dirSongsMap.clear();
+    m_dirSubdirsMap.clear();
     ui->listWidget_files->clear();// 清空列表
     ui->listWidget_files->addItem(QStringLiteral("加载中..."));// 显示“加载中...”
     updateCurrentPathLabel();// 更新当前路径标签

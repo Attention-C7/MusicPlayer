@@ -181,8 +181,17 @@ void VoiceInputWidget::handleCommand(const QString &cmd, const QString &param)
             return;
         }
 
+        emit playRequested(m_allSongs[targetIndex].filePath);
+        /*
         m_playerController->setPlaylist(m_allSongs);
+        PlayContext ctx;
+        ctx.scopeList = m_allSongs;
+        ctx.source = PlayContext::All;
+        ctx.globalIndex = targetIndex;
+        ctx.scopeIndex = targetIndex;
+        m_playerController->setContext(ctx);
         m_playerController->playSong(targetIndex);
+        */
         const QFileInfo info(m_allSongs[targetIndex].filePath);
         const QString title = m_allSongs[targetIndex].title.trimmed().isEmpty()
                                   ? info.completeBaseName()

@@ -35,6 +35,8 @@ public:
         QMap<QString, QList<SongInfo>> albumMap
     );
 
+    VoiceInputWidget *voiceInputWidget() const { return m_voiceWidget; }  //供 MusicPlayer 连接语音「按路径播放」到 ListWidget::playFromPath
+
 signals:
     void showListRequested();   //用户点「列表」等操作时由 PlayWidget emit，MusicPlayer 收到后执行 showList()，从而 播放页不直接操作 ListWidget 几何，只发「请求」，降低与主窗口布局的耦合。
 
