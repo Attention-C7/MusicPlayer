@@ -29,6 +29,13 @@ set(PROJECT_SOURCES
         playwidget.ui
         aicontroller.h
         aicontroller.cpp
+        command.h
+        localruleengine.h
+        localruleengine.cpp
+        commandvalidator.h
+        commandvalidator.cpp
+        commanddispatcher.h
+        commanddispatcher.cpp
         voiceinputwidget.h
         voiceinputwidget.cpp
         voiceinputwidget.ui

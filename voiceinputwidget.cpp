@@ -25,7 +25,7 @@ VoiceInputWidget::VoiceInputWidget(
     ui->setupUi(this);
 
     ui->panel_input->setMaximumHeight(0);
-    ui->btn_toggle->setText(QStringLiteral("🎤 语音/文字控制"));
+    ui->btn_toggle->setText(QStringLiteral("语音/文字控制"));
     ui->lbl_hint->setText(QStringLiteral("当前为文字模式，语音录入需接入麦克风SDK"));
     ui->lbl_result->setText(QString());
     if (m_aiController != nullptr) {
@@ -38,26 +38,13 @@ VoiceInputWidget::VoiceInputWidget(
 
     connect(ui->btn_toggle, &QPushButton::clicked, this, &VoiceInputWidget::toggleExpanded);
 
-    connect(ui->btn_send, &QPushButton::clicked, this, [this]() {
-        if (m_aiController == nullptr) {
-            ui->lbl_result->setText(QStringLiteral("AI控制器未初始化"));
-            return;
-        }
+    connect(ui->btn_send, &QPushButton::clicked, this, &VoiceInputWidget::onSendClicked);
 
-        const QString input = ui->lineEdit_input->text().trimmed();
-        if (input.isEmpty()) {
-            return;
-        }
-
-        const bool handledByLocal = m_aiController->recognize(input);
-        ui->lineEdit_input->clear();
-        if (!handledByLocal) {
-            ui->lbl_result->setText(QStringLiteral("联网识别中..."));
-        }
-    });
-
-    connect(m_aiController, &AiController::commandReady, this, &VoiceInputWidget::handleCommand);
-    connect(m_aiController, &AiController::recognizeFailed, this, [this](const QString &error) {
+    connect(m_aiController, &AiController::recognizing, this, &VoiceInputWidget::onRecognizing);
+    connect(m_aiController, &AiController::recognizeFailed, this, &VoiceInputWidget::onRecognizeFailed);
+    connect(m_aiController->dispatcher(), &CommandDispatcher::dispatchResult, this, &VoiceInputWidget::onDispatchResult);
+    //connect(m_aiController, &AiController::commandReady, this, &VoiceInputWidget::handleCommand);
+    /*connect(m_aiController, &AiController::recognizeFailed, this, [this](const QString &error) {
         if (error.contains(QStringLiteral("未能及时响应"))) {
             ui->lbl_result->setText(QStringLiteral("未能及时响应，已尝试本地处理"));
             return;
@@ -67,7 +54,7 @@ VoiceInputWidget::VoiceInputWidget(
             return;
         }
         ui->lbl_result->setText(QStringLiteral("网络错误：") + error);
-    });
+    });*/
 }
 
 VoiceInputWidget::~VoiceInputWidget()
@@ -86,6 +73,17 @@ void VoiceInputWidget::setSearchContext(
     m_albumMap = albumMap;
     if (m_aiController != nullptr) {
         m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
+    }
+}
+
+void VoiceInputWidget::onSendClicked()
+{
+    const QString input = ui->lineEdit_input->text().trimmed();
+    if (input.isEmpty()) {
+        return;
+    }
+    if (m_aiController != nullptr) {
+        m_aiController->recognize(input);
     }
 }
 
@@ -206,4 +204,16 @@ void VoiceInputWidget::handleCommand(const QString &cmd, const QString &param)
     }
 
     ui->lbl_result->setText(QStringLiteral("未识别指令，请重试"));
+}
+
+void VoiceInputWidget::onRecognizing(){
+    ui->lbl_result->setText(QStringLiteral("联网识别中..."));
+}
+
+void VoiceInputWidget::onRecognizeFailed(const QString &error){
+    ui->lbl_result->setText(error.contains(QStringLiteral("超时")) ? QStringLiteral("网络超时，请重试") : QStringLiteral("网络错误：") + error);
+}
+
+void VoiceInputWidget::onDispatchResult(bool success, const QString &message){
+    ui->lbl_result->setText(message);
 }

@@ -1,92 +1,283 @@
 #include "aicontroller.h"
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkRequest>
 #include <QRegularExpression>
 #include <QTimer>
 #include <QUrl>
+#include <QVariant>
 
-namespace {
-bool matchExactWithTone(const QString &normalized, const QString &corePattern)
-{
-    const QRegularExpression re(
-        QStringLiteral("^(?:%1)(?:一下|[啊吧呀呢嘛啦])?$").arg(corePattern)
-    );
-    return re.match(normalized).hasMatch();
-}
-
-bool matchLocalBasicCommand(const QString &input, QString &cmd, QString &param)
-{
-    const QString normalized = input.trimmed().toLower();
-    if (normalized.isEmpty()) {
-        return false;
-    }
-
-    if (matchExactWithTone(normalized, QStringLiteral("下一首|下一曲|next|下一个"))) {
-        cmd = QStringLiteral("next");
-        param.clear();
-        return true;
-    }
-    if (matchExactWithTone(normalized, QStringLiteral("上一首|上一曲|prev|上一个|previous"))) {
-        cmd = QStringLiteral("prev");
-        param.clear();
-        return true;
-    }
-    if (matchExactWithTone(normalized, QStringLiteral("播放|play|继续|resume"))) {
-        cmd = QStringLiteral("play");
-        param.clear();
-        return true;
-    }
-    if (matchExactWithTone(normalized, QStringLiteral("暂停|pause|停止|stop|停一下"))) {
-        cmd = QStringLiteral("pause");
-        param.clear();
-        return true;
-    }
-    if (matchExactWithTone(normalized, QStringLiteral("随机|shuffle|随机播放|乱序播放|随机模式"))) {
-        cmd = QStringLiteral("mode");
-        param = QStringLiteral("random");
-        return true;
-    }
-    if (matchExactWithTone(normalized, QStringLiteral("单曲循环|单曲|repeat.?one|循环单曲"))) {
-        cmd = QStringLiteral("mode");
-        param = QStringLiteral("single");
-        return true;
-    }
-    if (matchExactWithTone(normalized, QStringLiteral("目录循环|文件夹循环|列表循环|当前目录循环"))) {
-        cmd = QStringLiteral("mode");
-        param = QStringLiteral("folder");
-        return true;
-    }
-    if (matchExactWithTone(normalized, QStringLiteral("全部循环|循环全部|全循环|repeat.?all"))) {
-        cmd = QStringLiteral("mode");
-        param = QStringLiteral("all");
-        return true;
-    }
-
-    return false;
-}
-}
-
-AiController::AiController(QObject *parent)
+AiController::AiController(PlayerController *controller, QObject *parent)
     : QObject(parent)
     , m_manager(new QNetworkAccessManager(this))
-    , m_apiKey(QString::fromUtf8(qgetenv("DASHSCOPE_API_KEY")).trimmed())
+    ,m_dispatcher(new CommandDispatcher(controller, this))
+    ,m_apiKey(QString::fromUtf8(qgetenv("DASHSCOPE_API_KEY")))
 {
+    //网络响应统一走onNetworkReply
+    connect(m_manager, &QNetworkAccessManager::finished, this, &AiController::onNetworkReply);
 }
+//CommandDispatcher在这里创建，持有controller引用
+//qgetenv从环境变量中读Key,不写死在代码里
+//finished信号在网络请求完成时触发
 
 void AiController::setSearchContext(
     QList<SongInfo> allSongs,
     QMap<QString, QList<SongInfo>> artistMap,
-    QMap<QString, QList<SongInfo>> albumMap
-)
+    QMap<QString, QList<SongInfo>> albumMap)
 {
-    m_allSongs = allSongs;
-    m_artistMap = artistMap;
-    m_albumMap = albumMap;
+    //转发给dispatcher
+    m_dispatcher->setSearchContext(allSongs, artistMap, albumMap);
+}
+//AiController不关心上下文，只负责识别和调度,直接透传给dispatcher
+
+bool AiController::recognize(const QString &input){
+    if (input.trimmed().isEmpty()){
+        return false;
+    }
+
+    //step1:本地规则匹配
+    Command cmd;
+    if (LocalRuleEngine::match(input, cmd)){
+        //本地命中，走验证+调度
+        processCommand(cmd);
+        return true;
+    }
+
+    //step2:联网识别
+    m_pendingInput = input;
+    sendToLLM(input);
+    emit recognizing();
+    return false;
+}
+//流程极简：本地匹配，成功则processCommand,否则sendToLLM
+//m_pendingInput保存输入，网络超时后可以二次本地匹配
+//emit recognizing通知UI显示“联网识别中...”
+
+void AiController::processCommand(const Command &cmd){
+    CommandValidator::Result result = CommandValidator::validate(cmd);
+    if (!result.valid){
+        emit recognizeFailed(result.reason);
+        return;
+    }
+
+    m_dispatcher->dispatch(cmd);
+}
+//验证+调度的统一入口
+//本地命中和网络返回都走这一个方法
+//保证行为一致性
+
+void AiController::sendToLLM(const QString &input){
+    if (m_apiKey.isEmpty()){
+        emit recognizeFailed(QStringLiteral("未配置DASHSCOPE_API_KEY"));
+        return;
+    }
+
+    //构建请求
+    QNetworkRequest request(QUrl(QStringLiteral("https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")));
+    request.setHeader(QNetworkRequest::ContentTypeHeader,QStringLiteral("application/json"));
+    request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(m_apiKey).toUtf8());
+
+    //system prompt:告诉LLM只返回结构化JSON
+    const QString systemPrompt = QStringLiteral(
+        "你是音乐播放器语音控制助手。"
+        "用户输入自然语言,你返回JSON指令。\n"
+        "支持的action:\n"
+        "playback.next / playback.prev / "
+        "playback.play / playback.pause\n"
+        "music.play（需target字段）\n"
+        "volume.up / volume.down\n"
+        "playlist.shuffle\n"
+        "格式：{\"version\":\"1.0\","
+        "\"action\":\"xxx\","
+        "\"target\":{\"type\":\"artist/title\","
+        "\"keyword\":\"xxx\"},"
+        "\"source\":\"llm\","
+        "\"confidence\":0.9}\n"
+        "只返回JSON，不要解释。"
+    );
+
+    //构建请求Body
+    QJsonObject body;
+    body["model"] = QStringLiteral("qwen-turbo");
+    body["max_tokens"] = 200;
+
+    QJsonArray messages;
+    QJsonObject sysMsg;
+    sysMsg["role"] = QStringLiteral("sysyem");
+    sysMsg["content"] = systemPrompt;
+    messages.append(sysMsg);
+
+    QJsonObject userMsg;
+    userMsg["role"] = QStringLiteral("user");
+    userMsg["content"] = input;
+    messages.append(userMsg);
+
+    body["messages"] = messages;
+
+    //发送请求
+    QNetworkReply *reply = m_manager->post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
+
+    //10s超时
+    QTimer *timer = new QTimer(this);
+    timer->setSingleShot(true);
+    timer->setProperty("llmReply", QVariant::fromValue(static_cast<QObject *>(reply)));
+    timer->start(10000);
+
+    connect(timer, &QTimer::timeout, this, &AiController::onLlmRequestTimeout);
+
+    // reply完成时停止timer
+    connect(reply, &QNetworkReply::finished, timer, &QTimer::stop);
+}
+//QNetworkRequest 构建HTTP请求头
+//QJsonDocument(body).toJson() 序列化为JSON字节流
+//QTimer::singleShot 10秒后触发超时处理
+//超时时先尝试二次本地匹配，再才报错
+
+void AiController::onNetworkReply(QNetworkReply *reply){
+    reply->deleteLater();
+
+    //检查网络错误
+    if (reply->error() != QNetworkReply::NoError){
+        //abort触发的error不再重复报错
+        if (reply->error() != QNetworkReply::OperationalCanceledError){
+            emit recognizeFailed(QStringLiteral("网络错误：") + reply->errorString());
+        }
+        return;
+    }
+
+    //读取响应
+    const QByteArray data = reply->readAll();
+    QJsonParseError parseError;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+
+    if (parseError.error != QJsonParseError::NoError){
+        emit recognizeFailed(QStringLiteral("响应解析失败"));
+        return;
+    }
+
+    //提取content文本
+    //格式：choices[0].message.content
+    QJsonObject root = doc.object();
+    QJsonArray choices = root["choices"].toArray();
+    if (choices.isEmpty()){
+        emit recognizeFailed(QStringLiteral("响应格式异常"));
+        return;
+    }
+
+    QString content = choices[0].toObject()["message"].toObject()["content"].toString();
+
+    //清理markdown标记
+    content = sanitizeJson(content);
+
+    //解析Command JSON
+    QJsonDocument cmdDoc = QJsonDocument::fromJson(content.toUtf8(), &parseError);
+
+    if (parseError.error != QJsonParseError::NoError){
+        emit recognizeFailed(QStringLiteral("指令解析失败"));
+        return;
+    }
+
+    //构建Command对象
+    Command cmd = parseCommandFromJson(cmdDoc.object());
+
+    //走统一验证+调度流程
+    processCommand(cmd);
 }
 
-bool AiController::recognize(QString userInput)
+void AiController::onLlmRequestTimeout()
+{
+    auto *timer = qobject_cast<QTimer *>(sender());
+    if (timer == nullptr) {
+        return;
+    }
+
+    auto *reply = qobject_cast<QNetworkReply *>(timer->property(QStringLiteral("llmReply")).value<QObject *>());
+    timer->deleteLater();
+
+    if (reply == nullptr) {
+        return;
+    }
+
+    if (reply->isRunning()) {
+        reply->abort();
+        Command fallback;
+        if (LocalRuleEngine::match(m_pendingInput, fallback)) {
+            processCommand(fallback);
+        } else {
+            emit recognizeFailed(QStringLiteral("网络超时，已尝试本地处理"));
+        }
+    }
+}
+
+Command AiController::parseCommandFromJson(const QJsonObject &obj){
+    Command cmd;
+
+    //解析action
+    cmd.action = actionStringToEnum(obj["action"].toString());
+
+    //解析target，可能为空
+    if (obj.contains("target")){
+        QJsonObject t = obj["target"].toObject();
+        cmd.target.type = t["type"].toString();
+        cmd.target.keyword = t["keyword"].toString();
+    }
+
+    //解析params
+    if (obj.contains("params")){
+        cmd.params = obj["params"].toObject().toVariantMap();
+    }
+
+    //解析元信息
+    cmd.source = obj["source"].toString("LLM");
+    cmd.confidence = static_cast<float>(obj["confidence"].toDouble(0.8));
+    cmd.valid = true;
+
+    return cmd;
+}
+//obj.contains() 先判断key存在再取值，防止崩溃
+//toObject().toVariantMap() QJsonObject转QVariantMap
+//toDouble(0.8) 第二个参数是默认值
+
+CommandAction AiController::actionStringToEnum(const QString &actionStr){
+    //LLM返回的action字符串映射到枚举
+    static const QMap<QString, CommandAction> actionMap = {
+        {"playback.next", CommandAction::PlaybackNext},
+        {"playback.prev", CommandAction::PlaybackPrev},
+        {"playback.play", CommandAction::PlaybackPlay},
+        {"playback.pause", CommandAction::PlaybackPause},
+        {"playback.seek", CommandAction::PlaybackSeek},
+        {"music.play", CommandAction::MusicPlay},
+        {"music.search", CommandAction::MusicSearch},
+        {"volume.up", CommandAction::VolumeUp},
+        {"volume.down", CommandAction::VolumeDown},
+        {"volume.set", CommandAction::VolumeSet},
+        {"playlist.shuffle", CommandAction::PlaylistShuffle},
+    };
+
+    return actionMap.value(actionStr.toLower(), CommandAction::Unknown);
+}
+//static const 只初始化一次，复用
+//C++11初始化列表语法构建QMap
+//QMap::value(key, defaultValue) 找不到时返回Unknown
+
+QString AiController::sanitizeJson(const QString &raw){
+    QString cleaned = raw.trimmed();
+
+    if (cleaned.startsWith(QStringLiteral("```"))) {
+        cleaned = cleaned.mid(3).trimmed();
+    }else if (cleaned.endsWith(QStringLiteral("```json"))){
+        cleaned = cleaned.mid(7).trimmed();
+    }
+    if (cleaned.endsWith(QStringLiteral("```"))){
+        cleaned.chop(3);
+        cleaned = cleaned.trimmed();
+    }
+    return cleaned;
+}
+
+/*bool AiController::recognize(const QString &userInput)
 {
     const QString trimmedInput = userInput.trimmed();
     if (trimmedInput.isEmpty()) {
@@ -293,9 +484,9 @@ bool AiController::recognize(QString userInput)
     });
 
     return false;
-}
+}*/
 
-QString AiController::sanitizeJsonText(const QString &text) const
+/*QString AiController::sanitizeJsonText(const QString &text) const
 {
     QString cleaned = text.trimmed();
     if (cleaned.startsWith(QStringLiteral("```"))) {
@@ -311,4 +502,4 @@ QString AiController::sanitizeJsonText(const QString &text) const
         cleaned = cleaned.trimmed();
     }
     return cleaned;
-}
+}*/

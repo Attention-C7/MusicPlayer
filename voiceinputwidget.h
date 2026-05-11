@@ -1,8 +1,9 @@
 #pragma once
 
-#include <QWidget>
 #include <QList>
 #include <QMap>
+#include <QString>
+#include <QWidget>
 
 #include "aicontroller.h"
 #include "playercontroller.h"
@@ -38,6 +39,12 @@ public:
 
 signals:
     void playRequested(const QString &filePath);  //search 命中后请求按绝对路径播放；由 MusicPlayer 接到 ListWidget::playFromPath
+
+private slots:
+    void onSendClicked();
+    void onRecognizing();
+    void onRecognizeFailed(const QString &error);
+    void onDispatchResult(bool success, const QString &message);
 
 private:
     void toggleExpanded();

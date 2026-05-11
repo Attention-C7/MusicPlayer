@@ -1,5 +1,7 @@
 # Qt build output
 build/
+build-win/
+aqtinstall.log
 *.user
 *.autosave
 
