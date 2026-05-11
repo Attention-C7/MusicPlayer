@@ -22,6 +22,11 @@ AiController::AiController(PlayerController *controller, QObject *parent)
 //qgetenv从环境变量中读Key,不写死在代码里
 //finished信号在网络请求完成时触发
 
+CommandDispatcher *AiController::dispatcher() const
+{
+    return m_dispatcher;
+}
+
 void AiController::setSearchContext(
     QList<SongInfo> allSongs,
     QMap<QString, QList<SongInfo>> artistMap,
