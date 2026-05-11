@@ -17,10 +17,17 @@ constexpr qreal kTonearmParkedDeg = 0.0;
 constexpr qreal kTonearmOnRecordDeg = 14.0;
 constexpr int kTonearmAnimMs = 750;
 
-/** 臂长相对 widget 短边比例（加长后可减小播放态转角仍能碰到外圈）。 */
+/** 臂长：相对控件短边，略长便于小角度碰到外圈沟槽。 */
 constexpr qreal kArmLengthFactor = 0.62;
-/** 支点相对唱片中心水平偏离：略大于 platterR，保证竖直时针身在圆外。 */
-constexpr qreal kPivotBeyondPlatterFactor = 0.09;
+
+/**
+ * 支点水平位置：相对「圆心 + platterR」（唱片几何最右端）向左缩进的比例（相对底座短边）。
+ * 竖直暂停时臂身为一条竖线 x = 圆心.x + pivotDx，须满足 pivotDx ≤ platterR，整条竖臂不会落到圆最右端右侧。
+ */
+constexpr qreal kPivotLeftOfCircleRightByBase = 0.028;
+
+/** 支点垂直位置：相对底座短边，负值为圆心上侧（底座右上角区域）。 */
+constexpr qreal kPivotUpFromCenterByBase = 0.34;
 
 } // namespace
 
@@ -212,10 +219,9 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
     }
     painter.restore();
 
-    // 唱臂：支点在唱片右侧圆外，暂停为竖直；播放为顺时针小角度，针尖落在外圈金属区
     const int baseDim = qMin(baseRect.width(), baseRect.height());
-    const qreal pivotDx = platterR + baseDim * kPivotBeyondPlatterFactor;
-    const qreal pivotDy = -baseDim * 0.34;
+    const qreal pivotDx = platterR - baseDim * kPivotLeftOfCircleRightByBase;
+    const qreal pivotDy = -baseDim * kPivotUpFromCenterByBase;
     const qreal armLen = side * kArmLengthFactor;
 
     painter.save();
@@ -223,7 +229,7 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
     painter.translate(pivotDx, pivotDy);
     painter.rotate(m_tonearmDeg);
 
-    // 臂身沿 +Y 为竖直向下；末端略向 -X 弯成唱头，顺时针旋转后针尖移向转盘
+    // 暂停 0°：臂沿 +Y 竖直向下；播放顺时针略转，唱头移向外圈
     QPainterPath arm;
     arm.moveTo(0, 0);
     arm.lineTo(0, armLen * 0.88);
