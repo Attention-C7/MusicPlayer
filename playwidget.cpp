@@ -16,7 +16,7 @@ PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
     , ui(new Ui::PlayWidget)
     , m_currentLrcIndex(-1)
     , m_controller(controller)
-    , m_aiController(new AiController(this))
+    //, m_aiController(new AiController(this))
     , m_voiceWidget(nullptr)
     , m_allSongs()
     , m_artistMap()
@@ -369,17 +369,12 @@ void PlayWidget::setOverlayAlpha(float alpha)
 void PlayWidget::setSearchContext(
     QList<SongInfo> allSongs,
     QMap<QString, QList<SongInfo>> artistMap,
-    QMap<QString, QList<SongInfo>> albumMap
-)
+    QMap<QString, QList<SongInfo>> albumMap)
 {
-    m_allSongs = allSongs;
-    m_artistMap = artistMap;
-    m_albumMap = albumMap;
-    if (m_aiController != nullptr) {
-        m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
-    }
-    if (m_voiceWidget != nullptr) {
-        m_voiceWidget->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
+    // 转发给VoiceInputWidget
+    // VoiceInputWidget再转给AiController
+    if (m_voiceWidge) {
+        m_voiceWidget->setSearchContext(allSongs, artistMap, albumMap);
     }
 }
 

@@ -7,7 +7,7 @@
 #include <QTimer>  //定时器，用于实现定时功能：节拍定时、长按检测等
 #include <QWidget>  //窗口组件，用于实现窗口管理、事件处理、绘制等功能
 
-#include "aicontroller.h"  //AI控制器，用于处理语音识别、命令解析等，与 VoiceInputWidget 配合
+//#include "aicontroller.h"  //AI控制器，用于处理语音识别、命令解析等，与 VoiceInputWidget 配合
 #include "playercontroller.h"  //播放控制器，用于控制播放器：播放、暂停、切换、seek等
 #include "songinfo.h"  //歌曲信息，用于存储歌曲元数据：标题、艺人、专辑、时长等。单曲元数据；setSearchContext 用 QList<SongInfo> 等。
 #include "voiceinputwidget.h"  //语音输入组件，用于处理语音输入：语音识别、命令解析等。语音输入 UI 成员指针类型需要完整类声明。
@@ -58,7 +58,7 @@ private:
     void setOverlayAlpha(float alpha);  //设置 overlayAlpha 属性值，并触发更新。
 
     Ui::PlayWidget *ui;  //Designer 生成控件树（按钮、滑条、scrollArea_lrc 等）。
-    PlayerController *m_controller;  //播放控制器，由构造传入，与 playwidget.cpp 初始化列表一致。
+    //PlayerController *m_controller;  //播放控制器，由构造传入，与 playwidget.cpp 初始化列表一致。
     QPixmap m_bgPixmap;  //模糊背景图，用于绘制时叠加。
     QMap<qint64, QString> m_lrcMap;  //歌词时间戳→文本映射，与 m_lrcLabels 联动。
     int m_currentLrcIndex;  //当前高亮歌词行索引，避免每帧全表扫描（具体逻辑在 .cpp）。
