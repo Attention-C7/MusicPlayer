@@ -12,10 +12,15 @@ constexpr int kShadowMargin = 6;
 constexpr int kBaseCornerRadius = 22;
 constexpr qreal kMsPerRevolution = 14000.0;
 
-/** 唱臂绕支点转角：0° 针尖落在沟槽/盘面上，正值为顺时针抬起移向底座外侧（暂停位）。 */
-constexpr qreal kTonearmOnRecordDeg = 0.0;
-constexpr qreal kTonearmParkedDeg = 34.0;
-constexpr int kTonearmAnimMs = 850;
+/** 暂停：0° 臂身为竖直向下（在底座上、针尖在唱片圆外）。播放：顺时针略转使针尖落在外圈沟槽。 */
+constexpr qreal kTonearmParkedDeg = 0.0;
+constexpr qreal kTonearmOnRecordDeg = 14.0;
+constexpr int kTonearmAnimMs = 750;
+
+/** 臂长相对 widget 短边比例（加长后可减小播放态转角仍能碰到外圈）。 */
+constexpr qreal kArmLengthFactor = 0.62;
+/** 支点相对唱片中心水平偏离：略大于 platterR，保证竖直时针身在圆外。 */
+constexpr qreal kPivotBeyondPlatterFactor = 0.09;
 
 } // namespace
 
@@ -207,18 +212,27 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
     }
     painter.restore();
 
-    // 唱臂（叠在转盘之上）；m_tonearmDeg 绕支点旋转，播放时落在盘面上，暂停时旋至盘面外
+    // 唱臂：支点在唱片右侧圆外，暂停为竖直；播放为顺时针小角度，针尖落在外圈金属区
+    const int baseDim = qMin(baseRect.width(), baseRect.height());
+    const qreal pivotDx = platterR + baseDim * kPivotBeyondPlatterFactor;
+    const qreal pivotDy = -baseDim * 0.34;
+    const qreal armLen = side * kArmLengthFactor;
+
     painter.save();
     painter.translate(center);
-    painter.translate(side * 0.28, -side * 0.38);
+    painter.translate(pivotDx, pivotDy);
     painter.rotate(m_tonearmDeg);
+
+    // 臂身沿 +Y 为竖直向下；末端略向 -X 弯成唱头，顺时针旋转后针尖移向转盘
     QPainterPath arm;
     arm.moveTo(0, 0);
-    arm.lineTo(-side * 0.06, side * 0.42);
-    arm.lineTo(-side * 0.09, side * 0.46);
-    arm.lineTo(-side * 0.11, side * 0.44);
-    painter.setPen(QPen(QColor("#dcdde2"), 4.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    arm.lineTo(0, armLen * 0.88);
+    arm.lineTo(-side * 0.028, armLen * 0.93);
+    arm.lineTo(-side * 0.038, armLen * 0.98);
+    painter.setPen(QPen(QColor("#e8eaef"), 3.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(Qt::NoBrush);
     painter.drawPath(arm);
+
     QLinearGradient wGrad(0, -10, 0, 10);
     wGrad.setColorAt(0.0, QColor("#f2f3f6"));
     wGrad.setColorAt(1.0, QColor("#aeb2bd"));
@@ -226,6 +240,6 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
     painter.setPen(QPen(QColor("#a8acb5"), 1.0));
     painter.drawEllipse(QPointF(0, 0), 10.0, 10.0);
     painter.setBrush(QColor("#ededf0"));
-    painter.drawRoundedRect(QRectF(-16.0, -22.0, 14.0, 28.0), 4.0, 4.0);
+    painter.drawRoundedRect(QRectF(-15.0, -21.0, 13.0, 26.0), 4.0, 4.0);
     painter.restore();
 }
