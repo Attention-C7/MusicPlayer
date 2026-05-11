@@ -116,7 +116,7 @@ void AiController::cleanupLlmTimerForReply(QNetworkReply *reply)
     if (reply == nullptr) {
         return;
     }
-    QObject *timerObj = reply->property(QStringLiteral("llmTimer")).value<QObject *>();
+    QObject *timerObj = reply->property("llmTimer").value<QObject*>();
     if (timerObj == nullptr) {
         return;
     }
@@ -127,7 +127,7 @@ void AiController::cleanupLlmTimerForReply(QNetworkReply *reply)
     disconnect(t, &QTimer::timeout, this, &AiController::onLlmRequestTimeout);
     t->stop();
     t->deleteLater();
-    reply->setProperty(QStringLiteral("llmTimer"), QVariant());
+    reply->setProperty("llmTimer", QVariant());
 }
 
 bool AiController::sendToLLM(const QString &input){
@@ -188,16 +188,16 @@ bool AiController::sendToLLM(const QString &input){
 
     //发送请求
     QNetworkReply *reply = m_manager->post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
-    reply->setProperty(QStringLiteral("llmRequestId"), QVariant::fromValue(requestId));
+    reply->setProperty("llmRequestId", QVariant::fromValue(requestId));
     m_activeLlmReply = reply;
 
     //10s超时
     QTimer *timer = new QTimer(this);
     timer->setObjectName(QStringLiteral("AiController_LlmTimeout"));
     timer->setSingleShot(true);
-    timer->setProperty(QStringLiteral("llmRequestId"), QVariant::fromValue(requestId));
-    timer->setProperty(QStringLiteral("llmReply"), QVariant::fromValue(static_cast<QObject *>(reply)));
-    reply->setProperty(QStringLiteral("llmTimer"), QVariant::fromValue(static_cast<QObject *>(timer)));
+    timer->setProperty("llmRequestId", QVariant::fromValue(requestId));
+    timer->setProperty("llmReply", QVariant::fromValue(static_cast<QObject *>(reply)));
+    reply->setProperty("llmTimer", QVariant::fromValue(static_cast<QObject *>(timer)));
 
     connect(timer, &QTimer::timeout, this, &AiController::onLlmRequestTimeout);
 
@@ -210,7 +210,7 @@ bool AiController::sendToLLM(const QString &input){
 //超时时先尝试二次本地匹配，再才报错
 
 void AiController::onNetworkReply(QNetworkReply *reply){
-    const qint64 replyId = reply->property(QStringLiteral("llmRequestId")).toLongLong();
+    const qint64 replyId = reply->property("llmRequestId").toLongLong();
     const bool stale = (replyId != m_llmRequestId);
     if (stale) {
         cleanupLlmTimerForReply(reply);
@@ -288,13 +288,13 @@ void AiController::onLlmRequestTimeout()
         return;
     }
 
-    const qint64 timerRid = timer->property(QStringLiteral("llmRequestId")).toLongLong();
+    const qint64 timerRid = timer->property("llmRequestId").toLongLong();
     auto *reply = qobject_cast<QNetworkReply *>(
-        timer->property(QStringLiteral("llmReply")).value<QObject *>());
+        timer->property("llmReply").value<QObject*>());
 
     disconnect(timer, &QTimer::timeout, this, &AiController::onLlmRequestTimeout);
     if (reply != nullptr) {
-        reply->setProperty(QStringLiteral("llmTimer"), QVariant());
+        reply->setProperty("llmTimer", QVariant());
     }
     timer->stop();
     timer->deleteLater();
