@@ -26,6 +26,12 @@ public:
     void prev(); //上一曲
     void next(); //下一曲
     void seek(qint64 position); //seek 到指定位置（毫秒）,毫秒 定位；实现里会按 duration 夹紧
+    qint64 playbackPositionMs() const; //当前播放进度（毫秒），供语音 seek 相对跳转
+    int volumePercent() const; //输出音量 0–100，对应 QAudioOutput 线性音量
+    void setVolumePercent(int percent); //设置音量 0–100（非零会解除静音）
+    void adjustVolumePercent(int delta); //在 Current 上增减，自动夹紧到 0–100
+    bool isMuted() const; //界面静音状态（与音量为 0 不同：语音设 0 不一定视为静音）
+    void setMuted(bool muted); //静音：输出 0 并记忆上次音量；取消则恢复
     void setPlayMode(PlayMode mode); //设置播放模式,设置 SingleLoop / FolderLoop / AllLoop / RandomPlay，变化时 emit playModeChanged
     int currentIndex() const; //当前曲目在全量表中的索引（与 m_ctx.globalIndex 一致，由 playByIndex / setContext 维护）
     int currentScopeIndex() const; //当前曲目在 m_ctx.scopeList 中的索引（界面「第几首」）
@@ -51,6 +57,7 @@ signals:
     void albumArtChanged(QPixmap pixmap); //专辑封面变化；PlayWidget 更新封面
     void lrcLoaded(QMap<qint64, QString> lyrics); //歌词加载完成；PlayWidget 更新歌词。歌词时间轴（毫秒 → 文本），PlayWidget 滚动歌词
     void playlistMetaUpdated(int index, SongInfo info); //播放列表元数据更新；ListWidget 里更新专辑、艺人等信息
+    void volumePercentChanged(int percent); //音量或静音变化；触控滑条与语音指令共用一路径时同步 UI
 
 private:
     static constexpr int SeekIntervalMs = 100;  //长按 seek 定时器间隔
@@ -70,4 +77,6 @@ private:
     PlayMode m_playMode; //当前播放模式
     QTimer *m_seekTimer; //长按 seek 定时器
     int m_seekDirection; //长按 seek 方向，1 向前，-1 向后
+    bool m_muted; //触控静音键打开时为 true；setVolumePercent(>0) 会清除
+    int m_volumePercentBeforeMute; //静音前音量，用于取消静音；默认 70
 };

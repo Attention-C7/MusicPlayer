@@ -2,13 +2,20 @@
 #include "ui_playwidget.h"
 
 #include <QFileInfo>
+#include <QFrame>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollBar>
+#include <QSignalBlocker>
+#include <QSlider>
 #include <QSpacerItem>
+#include <QStyle>
 #include <QVBoxLayout>
 
 PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent)
@@ -29,6 +36,10 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_longPressTimer(new QTimer(this))
     , m_pressDirection(0)
     , m_longPressTriggered(false)
+    , m_volumePopup(nullptr)
+    , m_sliderVolume(nullptr)
+    , m_lblVolumePercent(nullptr)
+    , m_btnVolumeMute(nullptr)
 {
     ui->setupUi(this);
     setAttribute(Qt::WA_TranslucentBackground, false);
@@ -64,13 +75,17 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     ui->btn_next->setIcon(QIcon(QStringLiteral(":/icons/icon/4next.png")));
     ui->btn_beat->setIcon(QIcon(QStringLiteral(":/icons/icon/11beat.png")));
     ui->btn_showList->setIcon(QIcon(QStringLiteral(":/icons/icon/10list.png")));
+    ui->btn_volume->setIcon(QIcon(QStringLiteral(":/icons/icon/9volume.png")));
     const QSize iconSize(28, 28);
     ui->btn_prev->setIconSize(iconSize);
     ui->btn_playPause->setIconSize(iconSize);
     ui->btn_next->setIconSize(iconSize);
+    ui->btn_volume->setIconSize(iconSize);
     ui->btn_playMode->setIconSize(iconSize);
     ui->btn_beat->setIconSize(iconSize);
     ui->btn_showList->setIconSize(iconSize);
+
+    setupVolumePopup();
     setPlayModeIcon(m_controller->playMode());
     ui->lbl_index->setText(QStringLiteral("0/0"));
     ui->lbl_title->setText(QStringLiteral("-"));
@@ -375,6 +390,144 @@ void PlayWidget::setSearchContext(
     // VoiceInputWidget再转给AiController
     if (m_voiceWidget) {
         m_voiceWidget->setSearchContext(allSongs, artistMap, albumMap);
+    }
+}
+
+void PlayWidget::setupVolumePopup()
+{
+    m_volumePopup = new QFrame(this);
+    m_volumePopup->setObjectName(QStringLiteral("frame_volumePopup"));
+    m_volumePopup->setFixedSize(76, 218);
+    m_volumePopup->hide();
+
+    auto *mainLay = new QVBoxLayout(m_volumePopup);
+    mainLay->setContentsMargins(10, 14, 10, 12);
+    mainLay->setSpacing(6);
+
+    m_sliderVolume = new QSlider(Qt::Vertical, m_volumePopup);
+    m_sliderVolume->setRange(0, 100);
+    m_sliderVolume->setSingleStep(5);
+    m_sliderVolume->setPageStep(10);
+    m_sliderVolume->setTracking(true);
+    m_sliderVolume->setMinimumHeight(124);
+    m_sliderVolume->setMaximumWidth(36);
+
+    auto *sliderWrap = new QHBoxLayout();
+    sliderWrap->addStretch();
+    sliderWrap->addWidget(m_sliderVolume);
+    sliderWrap->addStretch();
+    mainLay->addLayout(sliderWrap);
+
+    m_lblVolumePercent = new QLabel(QStringLiteral("0%"), m_volumePopup);
+    m_lblVolumePercent->setAlignment(Qt::AlignCenter);
+    QFont vf = m_lblVolumePercent->font();
+    vf.setPointSize(qMax(9, vf.pointSize()));
+    m_lblVolumePercent->setFont(vf);
+
+    mainLay->addWidget(m_lblVolumePercent);
+
+    m_btnVolumeMute = new QPushButton(m_volumePopup);
+    m_btnVolumeMute->setFlat(true);
+    m_btnVolumeMute->setIconSize(QSize(26, 26));
+    m_btnVolumeMute->setFixedHeight(34);
+
+    mainLay->addWidget(m_btnVolumeMute);
+
+    m_volumePopup->setStyleSheet(QStringLiteral(
+        "QFrame#frame_volumePopup { background: #ffffff; border-radius: 12px; "
+        "border: 1px solid #d8e8dc; }"
+        "QLabel { color: #2e7d4a; font-weight: 600; }"
+        "QSlider::groove:vertical { background: #e8eee9; width: 6px; border-radius: 3px; }"
+        "QSlider::handle:vertical { background: #3cb371; min-height: 16px; max-height: 16px; "
+        "margin: 0 -8px; border-radius: 8px; border: 2px solid #ffffff; }"
+        "QSlider::sub-page:vertical { background: #3cb371; border-radius: 3px; }"
+        "QSlider::add-page:vertical { background: #e8eee9; border-radius: 3px; }"));
+
+    connect(m_sliderVolume, &QSlider::valueChanged, this, &PlayWidget::onVolumeSliderValueChanged);
+    connect(m_btnVolumeMute, &QPushButton::clicked, this, &PlayWidget::onVolumeMuteButtonClicked);
+    connect(ui->btn_volume, &QPushButton::clicked, this, &PlayWidget::onVolumeButtonClicked);
+    connect(m_controller, &PlayerController::volumePercentChanged, this,
+            &PlayWidget::onControllerVolumePercentChanged);
+
+    onControllerVolumePercentChanged(m_controller->volumePercent());
+}
+
+void PlayWidget::repositionVolumePopup()
+{
+    if (m_volumePopup == nullptr || ui->btn_volume == nullptr) {
+        return;
+    }
+    const QPoint anchor = ui->btn_volume->mapTo(this,
+        QPoint(ui->btn_volume->width() / 2, 0));
+    const int w = m_volumePopup->width();
+    const int h = m_volumePopup->height();
+    int x = anchor.x() - w / 2;
+    int y = anchor.y() - h - 10;
+    const int margin = 8;
+    x = qBound(margin, x, qMax(margin, width() - w - margin));
+    y = qBound(margin, y, qMax(margin, height() - h - margin));
+    m_volumePopup->move(x, y);
+}
+
+void PlayWidget::refreshVolumeButtonIcon()
+{
+    if (ui->btn_volume == nullptr) {
+        return;
+    }
+    if (m_controller->isMuted() || m_controller->volumePercent() <= 0) {
+        ui->btn_volume->setIcon(style()->standardIcon(QStyle::SP_MediaVolumeMuted));
+    } else {
+        ui->btn_volume->setIcon(QIcon(QStringLiteral(":/icons/icon/9volume.png")));
+    }
+}
+
+void PlayWidget::onVolumeButtonClicked()
+{
+    if (m_volumePopup == nullptr) {
+        return;
+    }
+    if (m_volumePopup->isVisible()) {
+        m_volumePopup->hide();
+        return;
+    }
+    repositionVolumePopup();
+    m_volumePopup->show();
+    m_volumePopup->raise();
+}
+
+void PlayWidget::onVolumeSliderValueChanged(int value)
+{
+    m_lblVolumePercent->setText(QString::number(value) + QLatin1Char('%'));
+    m_controller->setVolumePercent(value);
+}
+
+void PlayWidget::onVolumeMuteButtonClicked()
+{
+    m_controller->setMuted(!m_controller->isMuted());
+}
+
+void PlayWidget::onControllerVolumePercentChanged(int percent)
+{
+    if (m_sliderVolume != nullptr) {
+        const QSignalBlocker blocker(m_sliderVolume);
+        m_sliderVolume->setValue(percent);
+    }
+    if (m_lblVolumePercent != nullptr) {
+        m_lblVolumePercent->setText(QString::number(percent) + QLatin1Char('%'));
+    }
+    refreshVolumeButtonIcon();
+    if (m_btnVolumeMute != nullptr) {
+        m_btnVolumeMute->setIcon(style()->standardIcon(m_controller->isMuted()
+                ? QStyle::SP_MediaVolumeMuted
+                : QStyle::SP_MediaVolume));
+    }
+}
+
+void PlayWidget::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    if (m_volumePopup != nullptr && m_volumePopup->isVisible()) {
+        repositionVolumePopup();
     }
 }
 

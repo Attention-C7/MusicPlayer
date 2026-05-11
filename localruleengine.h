@@ -12,12 +12,15 @@ public:
     //cmd:引用传出，命中时填充
     static bool match(const QString &input, Command &cmd);
 private:
-    //基础指令匹配：下一首/上一首/播放/暂停/随机/单曲循环
+    //短语类指令：一张 keyword→Action 表（含播放模式、随机、音量加减等）
     static bool matchBasic(const QString &input, Command &cmd);
-    //搜索指令匹配：播放周杰伦的歌等
+    //搜索指令匹配：播放周杰伦的歌等（带捕获组，单独规则）
     static bool matchSearch(const QString &input, Command &cmd);
-    //构建关键词→Action映射表
-    //只调用一次，结果复用
+    //进度跳转：跳到某秒、快进/快退若干秒
+    static bool matchSeek(const QString &input, Command &cmd);
+    //音量设为具体数值
+    static bool matchVolumeSet(const QString &input, Command &cmd);
+    //构建短语关键词→Action 映射表（仅调用处 static 缓存）
     static QMap<QString, CommandAction> buildKeywordMap();
 };
 //全部static方法，无需实例化，直接LocalRuleEngine::match(input, cmd)调用

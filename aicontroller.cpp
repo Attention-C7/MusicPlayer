@@ -89,18 +89,15 @@ void AiController::sendToLLM(const QString &input){
         "你是音乐播放器语音控制助手。"
         "用户输入自然语言,你返回JSON指令。\n"
         "支持的action:\n"
-        "playback.next / playback.prev / "
-        "playback.play / playback.pause\n"
-        "music.play（需target字段）\n"
-        "volume.up / volume.down\n"
-        "playlist.shuffle\n"
-        "格式：{\"version\":\"1.0\","
-        "\"action\":\"xxx\","
-        "\"target\":{\"type\":\"artist/title\","
-        "\"keyword\":\"xxx\"},"
-        "\"source\":\"llm\","
-        "\"confidence\":0.9}\n"
-        "只返回JSON，不要解释。"
+        "playback.next / playback.prev / playback.play / playback.pause\n"
+        "playback.seek（params.position 为毫秒绝对位置，或 params.offsetMs 为相对当前进度的毫秒偏移）\n"
+        "music.play / music.search（需 target：type 为 artist / album / title 之一，keyword 为关键词）\n"
+        "volume.up / volume.down / volume.set（params.volume 为 0-100 整数）\n"
+        "playlist.shuffle / playlist.loop_single / playlist.loop_all / playlist.loop_folder\n"
+        "ui.show_list（打开侧栏列表，等同点「列表」）/ ui.hide_list（返回全屏播放，等同列表内返回）\n"
+        "格式示例：{\"version\":\"1.0\",\"action\":\"volume.set\","
+        "\"params\":{\"volume\":50},\"source\":\"llm\",\"confidence\":0.9}\n"
+        "无对应字段可省略 target/params。只返回JSON，不要解释。"
     );
 
     //构建请求Body
@@ -110,7 +107,7 @@ void AiController::sendToLLM(const QString &input){
 
     QJsonArray messages;
     QJsonObject sysMsg;
-    sysMsg["role"] = QStringLiteral("sysyem");
+    sysMsg["role"] = QStringLiteral("system");
     sysMsg["content"] = systemPrompt;
     messages.append(sysMsg);
 
@@ -261,6 +258,11 @@ CommandAction AiController::actionStringToEnum(const QString &actionStr){
         {"volume.down", CommandAction::VolumeDown},
         {"volume.set", CommandAction::VolumeSet},
         {"playlist.shuffle", CommandAction::PlaylistShuffle},
+        {"playlist.loop_single", CommandAction::PlaylistLoopSingle},
+        {"playlist.loop_all", CommandAction::PlaylistLoopAll},
+        {"playlist.loop_folder", CommandAction::PlaylistLoopFolder},
+        {"ui.show_list", CommandAction::UiShowList},
+        {"ui.hide_list", CommandAction::UiHideList},
     };
 
     return actionMap.value(actionStr.toLower(), CommandAction::Unknown);

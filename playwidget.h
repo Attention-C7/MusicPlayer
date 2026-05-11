@@ -7,6 +7,12 @@
 #include <QTimer>  //定时器，用于实现定时功能：节拍定时、长按检测等
 #include <QWidget>  //窗口组件，用于实现窗口管理、事件处理、绘制等功能
 
+class QResizeEvent;
+
+class QFrame;
+class QSlider;
+class QPushButton;
+
 //#include "aicontroller.h"  //AI控制器，用于处理语音识别、命令解析等，与 VoiceInputWidget 配合
 #include "playercontroller.h"  //播放控制器，用于控制播放器：播放、暂停、切换、seek等
 #include "songinfo.h"  //歌曲信息，用于存储歌曲元数据：标题、艺人、专辑、时长等。单曲元数据；setSearchContext 用 QList<SongInfo> 等。
@@ -42,6 +48,12 @@ public:
 signals:
     void showListRequested();   //用户点「列表」等操作时由 PlayWidget emit，MusicPlayer 收到后执行 showList()，从而 播放页不直接操作 ListWidget 几何，只发「请求」，降低与主窗口布局的耦合。
 
+private slots:
+    void onVolumeButtonClicked();
+    void onVolumeSliderValueChanged(int value);
+    void onVolumeMuteButtonClicked();
+    void onControllerVolumePercentChanged(int percent);
+
 private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
     QString formatTime(qint64 ms) const;   //时间格式化：ms 转 mm:ss。与项目「时长用 qint64 毫秒」一致。
@@ -58,6 +70,11 @@ private:
     void setBeatEnabled(bool enabled);  //节拍效果开关：根据 enabled 更新按钮样式，并决定是否启动节拍定时器。
     float overlayAlpha() const;  //获取 overlayAlpha 属性值。与 Q_PROPERTY 配套的 READ/WRITE，供动画和绘制读取。
     void setOverlayAlpha(float alpha);  //设置 overlayAlpha 属性值，并触发更新。
+    void setupVolumePopup();  //音量浮层：垂直滑条 + 百分比 + 静音，与 PlayerController 同步
+    void repositionVolumePopup();  //锚定在音量按钮上方
+    void refreshVolumeButtonIcon();  //根据音量/静音刷新工具栏喇叭图标
+
+    void resizeEvent(QResizeEvent *event) override;
 
     Ui::PlayWidget *ui;  //Designer 生成控件树（按钮、滑条、scrollArea_lrc 等）。
     PlayerController *m_controller;  //播放控制器，由构造传入，与 playwidget.cpp 初始化列表一致。
@@ -78,4 +95,8 @@ private:
     QTimer *m_longPressTimer;  //长按定时器，每 500ms 调用一次 onLongPress()。
     int m_pressDirection;  //长按方向，决定是否启动长按检测。
     bool m_longPressTriggered;  //长按触发，决定是否启动长按检测。
+    QFrame *m_volumePopup;  //音量调节浮层父控件
+    QSlider *m_sliderVolume;  //垂直音量条 0–100
+    QLabel *m_lblVolumePercent;  //例如 50%
+    QPushButton *m_btnVolumeMute;  //浮层底部静音切换
 };

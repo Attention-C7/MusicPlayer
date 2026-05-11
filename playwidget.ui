@@ -227,6 +227,19 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="btn_volume">
+       <property name="minimumSize">
+        <size>
+         <width>56</width>
+         <height>56</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
       <widget class="QPushButton" name="btn_playMode">
        <property name="minimumSize">
         <size>

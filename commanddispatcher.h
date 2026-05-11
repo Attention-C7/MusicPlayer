@@ -29,8 +29,13 @@ public slots:
 signals:
     //调度结果通知UI，success=true时是操作描述，false时是错误信息
     void dispatchResult(bool success,QString message);
+    //与 PlayWidget::showListRequested、主窗 showList 同源
+    void showListRequested();
+    //与 ListWidget::backToPlayerRequested、主窗 hideList 同源
+    void backToPlayerRequested();
 
 private:
+    void handleUiNavigation(const Command &cmd);
     //按域分发
     void handlePlayback(const Command &cmd);
     void handleMusic(const Command &cmd);

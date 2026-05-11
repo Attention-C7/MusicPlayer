@@ -16,8 +16,14 @@ enum class CommandAction {
     VolumeUp,
     VolumeDown,
     VolumeSet,
-    //Playlist:列表操作
+    //Playlist:列表与播放模式
     PlaylistShuffle,
+    PlaylistLoopSingle,
+    PlaylistLoopAll,
+    PlaylistLoopFolder,
+    //UI：与 PlayWidget「列表」、ListWidget「返回」等价（由 CommandDispatcher 发信号）
+    UiShowList,
+    UiHideList,
     //兜底
     Unknown,
 };
@@ -59,5 +65,17 @@ struct Command {
         return action == CommandAction::VolumeUp 
             || action == CommandAction::VolumeDown
             || action == CommandAction::VolumeSet;
+    }
+
+    bool isPlaylistAction() const {
+        return action == CommandAction::PlaylistShuffle
+            || action == CommandAction::PlaylistLoopSingle
+            || action == CommandAction::PlaylistLoopAll
+            || action == CommandAction::PlaylistLoopFolder;
+    }
+
+    bool isUiNavigationAction() const {
+        return action == CommandAction::UiShowList
+            || action == CommandAction::UiHideList;
     }
 };

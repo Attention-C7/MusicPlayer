@@ -13,6 +13,8 @@ PlayerController::PlayerController(QObject *parent)
     , m_playMode(PlayMode::FolderLoop) //默认目录循环
     , m_seekTimer(new QTimer(this)) //长按 seek 定时器，用于实现长按快进/快退功能
     , m_seekDirection(0) //长按 seek 方向，0 表示停止，1 表示向前，-1 表示向后
+    , m_muted(false)
+    , m_volumePercentBeforeMute(50)
 {
     m_player->setAudioOutput(m_audioOutput); //Qt6 必需的一步，否则无声
 
@@ -46,6 +48,8 @@ PlayerController::PlayerController(QObject *parent)
             emit errorOccurred(errorString);
         }
     });
+
+    emit volumePercentChanged(volumePercent());
 }
 
 void PlayerController::setPlaylist(QList<SongInfo> songs)
@@ -231,6 +235,60 @@ void PlayerController::seek(qint64 position)
     }
     const qint64 clampedPosition = qBound<qint64>(0, position, maxDuration);
     m_player->setPosition(clampedPosition);
+}
+
+qint64 PlayerController::playbackPositionMs() const
+{
+    return m_player->position();
+}
+
+int PlayerController::volumePercent() const
+{
+    const float v = m_audioOutput->volume();
+    return qBound(0, static_cast<int>(qRound(static_cast<qreal>(v) * 100.0)), 100);
+}
+
+void PlayerController::setVolumePercent(int percent)
+{
+    const int p = qBound(0, percent, 100);
+    m_muted = false;
+    const int before = volumePercent();
+    m_audioOutput->setVolume(static_cast<float>(p) / 100.0f);
+    const int after = volumePercent();
+    if (after != before) {
+        emit volumePercentChanged(after);
+    }
+}
+
+void PlayerController::adjustVolumePercent(int delta)
+{
+    setVolumePercent(volumePercent() + delta);
+}
+
+bool PlayerController::isMuted() const
+{
+    return m_muted;
+}
+
+void PlayerController::setMuted(bool muted)
+{
+    if (m_muted == muted) {
+        return;
+    }
+    if (muted) {
+        const int v = volumePercent();
+        if (v > 0) {
+            m_volumePercentBeforeMute = v;
+        }
+        m_muted = true;
+        m_audioOutput->setVolume(0.0f);
+        emit volumePercentChanged(0);
+        return;
+    }
+    m_muted = false;
+    const int restore = m_volumePercentBeforeMute > 0 ? m_volumePercentBeforeMute : 70;
+    m_audioOutput->setVolume(static_cast<float>(restore) / 100.0f);
+    emit volumePercentChanged(volumePercent());
 }
 
 void PlayerController::setPlayMode(PlayMode mode)

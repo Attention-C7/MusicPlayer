@@ -2,6 +2,10 @@
 
 #include <QtGlobal>
 
+namespace {
+constexpr int kVolumeStepPercent = 10;
+}
+
 CommandDispatcher::CommandDispatcher(PlayerController *controller, QObject *parent)
     : QObject(parent), m_controller(controller){
         //成员已通过初始化列表赋值，无需额外操作
@@ -24,6 +28,11 @@ void CommandDispatcher::dispatch(const Command &cmd){
         return;
     }
 
+    if (cmd.isUiNavigationAction()) {
+        handleUiNavigation(cmd);
+        return;
+    }
+
     if (cmd.isPlaybackAction()){
         handlePlayback(cmd);
         return;
@@ -39,7 +48,7 @@ void CommandDispatcher::dispatch(const Command &cmd){
         return;
     }
 
-    if(cmd.action == CommandAction::PlaylistShuffle){
+    if (cmd.isPlaylistAction()){
         handlePlaylist(cmd);
         return;
     }
@@ -49,6 +58,22 @@ void CommandDispatcher::dispatch(const Command &cmd){
 //用isXxxAction()判断而不是switch
 //每个分支处理完直接return
 //兜底emit失败结果
+
+void CommandDispatcher::handleUiNavigation(const Command &cmd)
+{
+    switch (cmd.action) {
+    case CommandAction::UiShowList:
+        emit showListRequested();
+        emit dispatchResult(true, QStringLiteral("已打开列表"));
+        break;
+    case CommandAction::UiHideList:
+        emit backToPlayerRequested();
+        emit dispatchResult(true, QStringLiteral("已返回播放"));
+        break;
+    default:
+        break;
+    }
+}
 
 void CommandDispatcher::handlePlayback(const Command &cmd){
     switch (cmd.action){
@@ -69,9 +94,16 @@ void CommandDispatcher::handlePlayback(const Command &cmd){
             break;
         
         case CommandAction::PlaybackSeek: {
-            const qint64 pos = static_cast<qint64>(
-                cmd.params.value(QStringLiteral("position")).toLongLong());
-            m_controller->seek(pos);
+            qint64 posMs = 0;
+            if (cmd.params.contains(QStringLiteral("position"))) {
+                posMs = static_cast<qint64>(
+                    cmd.params.value(QStringLiteral("position")).toLongLong());
+            } else {
+                posMs = m_controller->playbackPositionMs()
+                    + static_cast<qint64>(
+                          cmd.params.value(QStringLiteral("offsetMs")).toLongLong());
+            }
+            m_controller->seek(posMs);
             emit dispatchResult(true, QStringLiteral("已跳转进度"));
             break;
         }
@@ -127,38 +159,56 @@ void CommandDispatcher::handleMusic(const Command &cmd){
 }
 
 void CommandDispatcher::handleVolume(const Command &cmd){
-    //当前音量从controller获取
-    //PlayerController需新增getVolume()方法
-    //暂时用固定步进50
     switch (cmd.action){
         case CommandAction::VolumeUp:
-            //后续接入真实音量控制
-            emit dispatchResult(true, QStringLiteral("音量已调大"));
+            m_controller->adjustVolumePercent(kVolumeStepPercent);
+            emit dispatchResult(
+                true,
+                QStringLiteral("音量：%1%").arg(m_controller->volumePercent()));
             break;
-        
+
         case CommandAction::VolumeDown:
-            emit dispatchResult(true, QStringLiteral("音量已调小"));
+            m_controller->adjustVolumePercent(-kVolumeStepPercent);
+            emit dispatchResult(
+                true,
+                QStringLiteral("音量：%1%").arg(m_controller->volumePercent()));
             break;
         case CommandAction::VolumeSet:{
-            int vol = cmd.params
-                        .value(QStringLiteral("Volume"))
-                        .toInt();
-            Q_UNUSED(vol);
-            emit dispatchResult(true, QStringLiteral("音量已设置"));
+            const int vol = cmd.params
+                              .value(QStringLiteral("volume"))
+                              .toInt();
+            m_controller->setVolumePercent(vol);
+            emit dispatchResult(
+                true,
+                QStringLiteral("音量已设为 %1%").arg(m_controller->volumePercent()));
             break;
         }
         default:
             break;
     }
 }
-//Volume控制需要QAudioOutput::setVolume()
-//现阶段先做框架，Q_UNUSED(vol)标记为暂未使用的变量避免编译警告
-//后续在PlayerController里暴露音量接口再补全
 
 void CommandDispatcher::handlePlaylist(const Command &cmd){
-    if (cmd.action == CommandAction::PlaylistShuffle){
+    switch (cmd.action) {
+    case CommandAction::PlaylistShuffle:
         m_controller->setPlayMode(PlayMode::RandomPlay);
         emit dispatchResult(true, QStringLiteral("已设置：随机播放"));
+        break;
+    case CommandAction::PlaylistLoopSingle:
+        m_controller->setPlayMode(PlayMode::SingleLoop);
+        emit dispatchResult(true, QStringLiteral("已设置：单曲循环"));
+        break;
+    case CommandAction::PlaylistLoopAll:
+        m_controller->setPlayMode(PlayMode::AllLoop);
+        emit dispatchResult(true, QStringLiteral("已设置：列表循环（全部）"));
+        break;
+    case CommandAction::PlaylistLoopFolder:
+        m_controller->setPlayMode(PlayMode::FolderLoop);
+        emit dispatchResult(true, QStringLiteral("已设置：文件夹循环"));
+        break;
+    default:
+        emit dispatchResult(false, QStringLiteral("暂不支持该列表指令"));
+        break;
     }
 }
 

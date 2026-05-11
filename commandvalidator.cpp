@@ -50,11 +50,12 @@ bool CommandValidator::validateParams(const Command &cmd, QString &reason)
         }
     }
 
-    // PlaybackSeek需要有position参数
+    // PlaybackSeek：绝对毫秒 position 或与当前进度相加的 offsetMs 至少其一
     if (cmd.action == CommandAction::PlaybackSeek) {
-        if (!cmd.params.contains(
-                QStringLiteral("position"))) {
-            reason = QStringLiteral("跳转指令缺少position参数");
+        const bool hasPos = cmd.params.contains(QStringLiteral("position"));
+        const bool hasOff = cmd.params.contains(QStringLiteral("offsetMs"));
+        if (!hasPos && !hasOff) {
+            reason = QStringLiteral("跳转指令需要 position 或 offsetMs");
             return false;
         }
     }
