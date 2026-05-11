@@ -2,6 +2,8 @@
 #include "./ui_musicplayer.h"
 #include "commanddispatcher.h"
 #include "voiceinputwidget.h"
+#include <QGuiApplication>
+#include <QMouseEvent>
 #include <QPropertyAnimation>
 #include <QEasingCurve>
 #include <QDir>
@@ -49,11 +51,46 @@ MusicPlayer::MusicPlayer(QWidget *parent)   //构造函数，初始化UI对象�
     connect(m_aiController->dispatcher(), &CommandDispatcher::dispatchResult, voiceWidget, &VoiceInputWidget::onDispatchResult);
     connect(m_aiController, &AiController::recognizing, voiceWidget, &VoiceInputWidget::onRecognizing);
     connect(m_aiController, &AiController::recognizeFailed, voiceWidget, &VoiceInputWidget::onRecognizeFailed);
+
+    // 点在播放页任意控件上时事件不会传给 MusicPlayer，故用应用级 filter 统一接到 hideList()
+    qApp->installEventFilter(this);
 }
 
 MusicPlayer::~MusicPlayer()
 {
+    qApp->removeEventFilter(this);
     delete ui;  //释放UI对象,.ui 生成的界面堆在 ui 里，需手动释放
+}
+
+bool MusicPlayer::eventFilter(QObject *watched, QEvent *event)
+{
+    tryHideListIfPressOutsideList(watched, event);
+    return QWidget::eventFilter(watched, event);
+}
+
+void MusicPlayer::tryHideListIfPressOutsideList(QObject *eventTarget, QEvent *event)
+{
+    if (!m_listWidget->isVisible()) {
+        return;
+    }
+    const QEvent::Type type = event->type();
+    if (type != QEvent::MouseButtonPress && type != QEvent::TouchBegin) {
+        return;
+    }
+    if (type == QEvent::MouseButtonPress
+        && static_cast<QMouseEvent *>(event)->button() != Qt::LeftButton) {
+        return;
+    }
+
+    QWidget *w = qobject_cast<QWidget *>(eventTarget);
+    if (w == nullptr || !isAncestorOf(w)) {
+        return;
+    }
+    if (w == m_listWidget || m_listWidget->isAncestorOf(w)) {
+        return;
+    }
+
+    hideList();
 }
 
 void MusicPlayer::showList()  //显示列表界面

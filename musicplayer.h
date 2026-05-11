@@ -3,6 +3,8 @@
 #include <QPropertyAnimation>
 #include <QWidget>
 
+class QEvent;
+
 #include "listwidget.h"
 #include "playercontroller.h"
 #include "playwidget.h"
@@ -23,7 +25,12 @@ public:
     explicit MusicPlayer(QWidget *parent = nullptr);    //explicit 防止隐式转换，QWidget *parent = nullptr 默认父窗口为空
     ~MusicPlayer() override;  //override 确保重写父类虚函数，防止编译器警告，override 是 C++11 引入的关键字，用于显式声明重写父类虚函数
 
+protected:
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
+    void tryHideListIfPressOutsideList(QObject *eventTarget, QEvent *event);
+
     void showList();  //显示列表界面
     void hideList();  //隐藏列表界面
 
