@@ -9,6 +9,42 @@
 #include <QUrl>
 #include <QVariant>
 
+namespace {
+
+/** OpenAI/Dashscope 兼容：提取 HTTP 200 仍可能返回的 error 字段说明（Key、配额、参数等）。 */
+QString dashscopeStyleApiErrorText(const QJsonObject &root)
+{
+    const QJsonValue errVal = root.value(QStringLiteral("error"));
+    if (errVal.isString()) {
+        const QString s = errVal.toString().trimmed();
+        return s.isEmpty() ? QString() : s;
+    }
+    if (!errVal.isObject()) {
+        return QString();
+    }
+    const QJsonObject err = errVal.toObject();
+    QString msg = err.value(QStringLiteral("message")).toString().trimmed();
+    if (msg.isEmpty()) {
+        msg = err.value(QStringLiteral("msg")).toString().trimmed();
+    }
+    const QString code = err.value(QStringLiteral("code")).toString().trimmed();
+    const QString type = err.value(QStringLiteral("type")).toString().trimmed();
+    QString out = msg;
+    if (!code.isEmpty()) {
+        out += out.isEmpty()
+            ? QStringLiteral("code:%1").arg(code)
+            : QStringLiteral("（code:%1）").arg(code);
+    }
+    if (!type.isEmpty()) {
+        out += out.isEmpty()
+            ? QStringLiteral("type:%1").arg(type)
+            : QStringLiteral("（type:%1）").arg(type);
+    }
+    return out.trimmed();
+}
+
+} // namespace
+
 AiController::AiController(PlayerController *controller, QObject *parent)
     : QObject(parent)
     , m_manager(new QNetworkAccessManager(this))
@@ -50,9 +86,11 @@ bool AiController::recognize(const QString &input){
         return true;
     }
 
-    //step2:联网识别
+    //step2:联网识别（仅在实际发出 HTTP 后再提示「联网识别中」，避免未配置 Key 等情况下界面卡住）
     m_pendingInput = input;
-    sendToLLM(input);
+    if (!sendToLLM(input)) {
+        return false;
+    }
     emit recognizing();
     return false;
 }
@@ -73,10 +111,39 @@ void AiController::processCommand(const Command &cmd){
 //本地命中和网络返回都走这一个方法
 //保证行为一致性
 
-void AiController::sendToLLM(const QString &input){
+void AiController::cleanupLlmTimerForReply(QNetworkReply *reply)
+{
+    if (reply == nullptr) {
+        return;
+    }
+    QObject *timerObj = reply->property(QStringLiteral("llmTimer")).value<QObject *>();
+    if (timerObj == nullptr) {
+        return;
+    }
+    auto *t = qobject_cast<QTimer *>(timerObj);
+    if (t == nullptr) {
+        return;
+    }
+    disconnect(t, &QTimer::timeout, this, &AiController::onLlmRequestTimeout);
+    t->stop();
+    t->deleteLater();
+    reply->setProperty(QStringLiteral("llmTimer"), QVariant());
+}
+
+bool AiController::sendToLLM(const QString &input){
     if (m_apiKey.isEmpty()){
         emit recognizeFailed(QStringLiteral("未配置DASHSCOPE_API_KEY"));
-        return;
+        return false;
+    }
+
+    ++m_llmRequestId;
+    const qint64 requestId = m_llmRequestId;
+
+    if (m_activeLlmReply) {
+        QNetworkReply *oldReply = m_activeLlmReply.data();
+        cleanupLlmTimerForReply(oldReply);
+        oldReply->abort();
+        m_activeLlmReply.clear();
     }
 
     //构建请求
@@ -91,7 +158,7 @@ void AiController::sendToLLM(const QString &input){
         "支持的action:\n"
         "playback.next / playback.prev / playback.play / playback.pause\n"
         "playback.seek（params.position 为毫秒绝对位置，或 params.offsetMs 为相对当前进度的毫秒偏移）\n"
-        "music.play / music.search（需 target：type 为 artist / album / title 之一，keyword 为关键词）\n"
+        "music.play / music.search（在本地已扫描曲库中检索；target：type 为 artist / album / title 之一，keyword 为关键词）\n"
         "volume.up / volume.down / volume.set（params.volume 为 0-100 整数）\n"
         "volume.mute / volume.unmute（静音 / 取消静音，与界面静音键一致）\n"
         "playlist.shuffle / playlist.loop_single / playlist.loop_all / playlist.loop_folder\n"
@@ -121,17 +188,21 @@ void AiController::sendToLLM(const QString &input){
 
     //发送请求
     QNetworkReply *reply = m_manager->post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
+    reply->setProperty(QStringLiteral("llmRequestId"), QVariant::fromValue(requestId));
+    m_activeLlmReply = reply;
 
     //10s超时
     QTimer *timer = new QTimer(this);
+    timer->setObjectName(QStringLiteral("AiController_LlmTimeout"));
     timer->setSingleShot(true);
-    timer->setProperty("llmReply", QVariant::fromValue(static_cast<QObject *>(reply)));
-    timer->start(10000);
+    timer->setProperty(QStringLiteral("llmRequestId"), QVariant::fromValue(requestId));
+    timer->setProperty(QStringLiteral("llmReply"), QVariant::fromValue(static_cast<QObject *>(reply)));
+    reply->setProperty(QStringLiteral("llmTimer"), QVariant::fromValue(static_cast<QObject *>(timer)));
 
     connect(timer, &QTimer::timeout, this, &AiController::onLlmRequestTimeout);
 
-    // reply完成时停止timer
-    connect(reply, &QNetworkReply::finished, timer, &QTimer::stop);
+    timer->start(10000);
+    return true;
 }
 //QNetworkRequest 构建HTTP请求头
 //QJsonDocument(body).toJson() 序列化为JSON字节流
@@ -139,7 +210,16 @@ void AiController::sendToLLM(const QString &input){
 //超时时先尝试二次本地匹配，再才报错
 
 void AiController::onNetworkReply(QNetworkReply *reply){
-    reply->deleteLater();
+    const qint64 replyId = reply->property(QStringLiteral("llmRequestId")).toLongLong();
+    const bool stale = (replyId != m_llmRequestId);
+    if (stale) {
+        cleanupLlmTimerForReply(reply);
+        reply->deleteLater();
+        return;
+    }
+
+    cleanupLlmTimerForReply(reply);
+    m_activeLlmReply.clear();
 
     //检查网络错误
     if (reply->error() != QNetworkReply::NoError){
@@ -147,6 +227,7 @@ void AiController::onNetworkReply(QNetworkReply *reply){
         if (reply->error() != QNetworkReply::OperationCanceledError){
             emit recognizeFailed(QStringLiteral("网络错误：") + reply->errorString());
         }
+        reply->deleteLater();
         return;
     }
 
@@ -157,15 +238,24 @@ void AiController::onNetworkReply(QNetworkReply *reply){
 
     if (parseError.error != QJsonParseError::NoError){
         emit recognizeFailed(QStringLiteral("响应解析失败"));
+        reply->deleteLater();
+        return;
+    }
+
+    QJsonObject root = doc.object();
+    const QString apiErr = dashscopeStyleApiErrorText(root);
+    if (!apiErr.isEmpty()) {
+        emit recognizeFailed(QStringLiteral("接口错误：") + apiErr);
+        reply->deleteLater();
         return;
     }
 
     //提取content文本
     //格式：choices[0].message.content
-    QJsonObject root = doc.object();
     QJsonArray choices = root["choices"].toArray();
     if (choices.isEmpty()){
         emit recognizeFailed(QStringLiteral("响应格式异常"));
+        reply->deleteLater();
         return;
     }
 
@@ -179,6 +269,7 @@ void AiController::onNetworkReply(QNetworkReply *reply){
 
     if (parseError.error != QJsonParseError::NoError){
         emit recognizeFailed(QStringLiteral("指令解析失败"));
+        reply->deleteLater();
         return;
     }
 
@@ -187,6 +278,7 @@ void AiController::onNetworkReply(QNetworkReply *reply){
 
     //走统一验证+调度流程
     processCommand(cmd);
+    reply->deleteLater();
 }
 
 void AiController::onLlmRequestTimeout()
@@ -196,10 +288,20 @@ void AiController::onLlmRequestTimeout()
         return;
     }
 
-    auto *reply = qobject_cast<QNetworkReply*>(
-        timer->property("llmReply")
-              .value<QObject*>());
+    const qint64 timerRid = timer->property(QStringLiteral("llmRequestId")).toLongLong();
+    auto *reply = qobject_cast<QNetworkReply *>(
+        timer->property(QStringLiteral("llmReply")).value<QObject *>());
+
+    disconnect(timer, &QTimer::timeout, this, &AiController::onLlmRequestTimeout);
+    if (reply != nullptr) {
+        reply->setProperty(QStringLiteral("llmTimer"), QVariant());
+    }
+    timer->stop();
     timer->deleteLater();
+
+    if (timerRid != m_llmRequestId) {
+        return;
+    }
 
     if (reply == nullptr) {
         return;
@@ -279,8 +381,10 @@ QString AiController::sanitizeJson(const QString &raw){
 
     if (cleaned.startsWith(QStringLiteral("```"))) {
         cleaned = cleaned.mid(3).trimmed();
-    }else if (cleaned.endsWith(QStringLiteral("```json"))){
-        cleaned = cleaned.mid(7).trimmed();
+        const int nl = cleaned.indexOf(QLatin1Char('\n'));
+        if (nl >= 0 && cleaned.left(nl).compare(QStringLiteral("json"), Qt::CaseInsensitive) == 0) {
+            cleaned = cleaned.mid(nl + 1).trimmed();
+        }
     }
     if (cleaned.endsWith(QStringLiteral("```"))){
         cleaned.chop(3);

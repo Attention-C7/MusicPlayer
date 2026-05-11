@@ -219,7 +219,17 @@ void VoiceInputWidget::onRecognizing(){
 }
 
 void VoiceInputWidget::onRecognizeFailed(const QString &error){
-    ui->lbl_result->setText(error.contains(QStringLiteral("超时")) ? QStringLiteral("网络超时，请重试") : QStringLiteral("网络错误：") + error);
+    if (error.contains(QStringLiteral("超时"))) {
+        ui->lbl_result->setText(QStringLiteral("网络超时，请重试"));
+        return;
+    }
+    // AiController 已带「网络错误：」「接口错误：」等前缀时不重复拼接
+    if (error.startsWith(QStringLiteral("网络错误："))
+        || error.startsWith(QStringLiteral("接口错误："))) {
+        ui->lbl_result->setText(error);
+        return;
+    }
+    ui->lbl_result->setText(QStringLiteral("网络错误：") + error);
 }
 
 void VoiceInputWidget::onDispatchResult(bool success, const QString &message){

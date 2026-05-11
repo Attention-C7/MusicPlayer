@@ -6,6 +6,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QObject>
+#include <QPointer>
 
 #include "command.h"
 #include "commandvalidator.h"
@@ -45,8 +46,10 @@ private slots:
     void onLlmRequestTimeout();
 
 private:
-    // 发送HTTP请求
-    void sendToLLM(const QString &input);
+    // 发送HTTP请求；返回 false 表示未发起请求（如未配置 Key）
+    bool sendToLLM(const QString &input);
+
+    void cleanupLlmTimerForReply(QNetworkReply *reply);
 
     // 解析LLM返回的JSON → Command
     Command parseCommandFromJson(const QJsonObject &obj);
@@ -63,7 +66,11 @@ private:
     QNetworkAccessManager *m_manager;
     CommandDispatcher *m_dispatcher;
     QString m_apiKey;
-    
+
+    // 最新一次 LLM 请求的代数，用于丢弃被取消或过期的响应
+    qint64 m_llmRequestId = 0;
+    QPointer<QNetworkReply> m_activeLlmReply;
+
     //记录当前网络请求的输入,用于超时后二次本地匹配
     QString m_pendingInput;
 };

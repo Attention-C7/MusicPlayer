@@ -1,7 +1,6 @@
 #include "musicplayer.h"
 #include "./ui_musicplayer.h"
 #include "commanddispatcher.h"
-#include "voiceinputwidget.h"
 #include <QGuiApplication>
 #include <QMouseEvent>
 #include <QPropertyAnimation>
@@ -47,10 +46,7 @@ MusicPlayer::MusicPlayer(QWidget *parent)   //构造函数，初始化UI对象�
     m_aiController->dispatcher()->setVolumeWarningParent(this);
     connect(m_aiController->dispatcher(), &CommandDispatcher::showListRequested, this, &MusicPlayer::showList);
     connect(m_aiController->dispatcher(), &CommandDispatcher::backToPlayerRequested, this, &MusicPlayer::hideList);
-    VoiceInputWidget *voiceWidget = m_playWidget->voiceInputWidget();
-    connect(m_aiController->dispatcher(), &CommandDispatcher::dispatchResult, voiceWidget, &VoiceInputWidget::onDispatchResult);
-    connect(m_aiController, &AiController::recognizing, voiceWidget, &VoiceInputWidget::onRecognizing);
-    connect(m_aiController, &AiController::recognizeFailed, voiceWidget, &VoiceInputWidget::onRecognizeFailed);
+    // recognizing / recognizeFailed / dispatchResult 由 VoiceInputWidget 构造内连接 AiController，勿重复连接以免槽执行两次
 
     // 点在播放页任意控件上时事件不会传给 MusicPlayer，故用应用级 filter 统一接到 hideList()
     qApp->installEventFilter(this);
