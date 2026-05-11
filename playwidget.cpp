@@ -3,11 +3,14 @@
 
 #include "volumesafety.h"
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QIcon>
+#include <QMouseEvent>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
@@ -399,7 +402,7 @@ void PlayWidget::setupVolumePopup()
 {
     m_volumePopup = new QFrame(this);
     m_volumePopup->setObjectName(QStringLiteral("frame_volumePopup"));
-    m_volumePopup->setFixedSize(76, 218);
+    m_volumePopup->setFixedSize(88, 228);
     m_volumePopup->hide();
 
     auto *mainLay = new QVBoxLayout(m_volumePopup);
@@ -411,8 +414,9 @@ void PlayWidget::setupVolumePopup()
     m_sliderVolume->setSingleStep(1);
     m_sliderVolume->setPageStep(1);
     m_sliderVolume->setTracking(true);
-    m_sliderVolume->setMinimumHeight(124);
-    m_sliderVolume->setMaximumWidth(36);
+    m_sliderVolume->setMinimumHeight(128);
+    m_sliderVolume->setMinimumWidth(52);
+    m_sliderVolume->setMaximumWidth(56);
 
     auto *sliderWrap = new QHBoxLayout();
     sliderWrap->addStretch();
@@ -435,16 +439,19 @@ void PlayWidget::setupVolumePopup()
 
     mainLay->addWidget(m_btnVolumeMute);
 
+    // 竖条：min 在下 max 在上 → sub-page 为下端至手柄（已调音量）绿色，add-page 为上端留白
+    // 勿给 sub-page/add-page 加 margin，否则会缩小可拖动热区导致只能“点跳”不能拖
     m_volumePopup->setStyleSheet(QStringLiteral(
         "QFrame#frame_volumePopup { background: #ffffff; border-radius: 12px; "
         "border: 1px solid #d8e8dc; }"
         "QLabel { color: #2e7d4a; font-weight: 600; }"
-        "QSlider::groove:vertical { border: 1px solid #dde8df; width: 8px; "
-        "background: #ffffff; border-radius: 4px; }"
-        "QSlider::handle:vertical { background: #3cb371; min-height: 16px; max-height: 16px; "
-        "margin: 0 -8px; border-radius: 8px; border: 2px solid #ffffff; }"
-        "QSlider::sub-page:vertical { background: #3cb371; border-radius: 3px; margin: 2px; }"
-        "QSlider::add-page:vertical { background: #ffffff; border-radius: 3px; margin: 2px; }"));
+        "QSlider::groove:vertical { border: 1px solid #dde8df; width: 14px; "
+        "background: #ffffff; border-radius: 7px; }"
+        "QSlider::handle:vertical { background: #3cb371; min-height: 32px; max-height: 32px; "
+        "min-width: 32px; max-width: 32px; margin: -14px -12px; border-radius: 16px; "
+        "border: 3px solid #ffffff; }"
+        "QSlider::sub-page:vertical { background: #3cb371; border-radius: 7px; }"
+        "QSlider::add-page:vertical { background: #ffffff; border-radius: 7px; }"));
 
     connect(m_sliderVolume, &QSlider::valueChanged, this, &PlayWidget::onVolumeSliderValueChanged);
     connect(m_sliderVolume, &QSlider::sliderReleased, this, &PlayWidget::onVolumeSliderReleased);
@@ -452,6 +459,18 @@ void PlayWidget::setupVolumePopup()
     connect(ui->btn_volume, &QPushButton::clicked, this, &PlayWidget::onVolumeButtonClicked);
     connect(m_controller, &PlayerController::volumePercentChanged, this,
             &PlayWidget::onControllerVolumePercentChanged);
+
+    if (QCoreApplication::instance() != nullptr) {
+        QCoreApplication::instance()->installEventFilter(this);
+    }
+
+    connect(ui->btn_prev, &QPushButton::pressed, this, &PlayWidget::hideVolumePopupIfOpen);
+    connect(ui->btn_next, &QPushButton::pressed, this, &PlayWidget::hideVolumePopupIfOpen);
+    connect(ui->btn_playPause, &QPushButton::clicked, this, &PlayWidget::hideVolumePopupIfOpen);
+    connect(ui->btn_playMode, &QPushButton::clicked, this, &PlayWidget::hideVolumePopupIfOpen);
+    connect(ui->btn_beat, &QPushButton::clicked, this, &PlayWidget::hideVolumePopupIfOpen);
+    connect(ui->btn_showList, &QPushButton::clicked, this, &PlayWidget::hideVolumePopupIfOpen);
+    connect(ui->slider_progress, &QSlider::sliderPressed, this, &PlayWidget::hideVolumePopupIfOpen);
 
     onControllerVolumePercentChanged(m_controller->volumePercent());
 }
@@ -497,6 +516,14 @@ void PlayWidget::onVolumeButtonClicked()
     repositionVolumePopup();
     m_volumePopup->show();
     m_volumePopup->raise();
+    m_volumePopup->activateWindow();
+}
+
+void PlayWidget::hideVolumePopupIfOpen()
+{
+    if (m_volumePopup != nullptr && m_volumePopup->isVisible()) {
+        m_volumePopup->hide();
+    }
 }
 
 void PlayWidget::onVolumeSliderValueChanged(int value)
@@ -576,8 +603,30 @@ void PlayWidget::resizeEvent(QResizeEvent *event)
     }
 }
 
+bool PlayWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    Q_UNUSED(watched);
+    if (m_volumePopup == nullptr || !m_volumePopup->isVisible()) {
+        return false;
+    }
+    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonDblClick) {
+        const auto *me = static_cast<const QMouseEvent *>(event);
+        const QPoint gp = me->globalPosition().toPoint();
+        const QRect popupRect(m_volumePopup->mapToGlobal(QPoint(0, 0)), m_volumePopup->size());
+        const QRect volumeBtnRect(ui->btn_volume->mapToGlobal(QPoint(0, 0)), ui->btn_volume->size());
+        if (popupRect.contains(gp) || volumeBtnRect.contains(gp)) {
+            return false;
+        }
+        m_volumePopup->hide();
+    }
+    return false;
+}
+
 PlayWidget::~PlayWidget()
 {
+    if (QCoreApplication::instance() != nullptr) {
+        QCoreApplication::instance()->removeEventFilter(this);
+    }
     delete ui;
 }
 

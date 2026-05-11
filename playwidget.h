@@ -7,6 +7,7 @@
 #include <QTimer>  //定时器，用于实现定时功能：节拍定时、长按检测等
 #include <QWidget>  //窗口组件，用于实现窗口管理、事件处理、绘制等功能
 
+class QEvent;
 class QResizeEvent;
 
 class QFrame;
@@ -54,6 +55,7 @@ private slots:
     void onVolumeSliderReleased();
     void onVolumeMuteButtonClicked();
     void onControllerVolumePercentChanged(int percent);
+    void hideVolumePopupIfOpen();
 
 private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
@@ -76,6 +78,7 @@ private:
     void refreshVolumeButtonIcon();  //根据音量/静音刷新工具栏喇叭图标
 
     void resizeEvent(QResizeEvent *event) override;
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
     Ui::PlayWidget *ui;  //Designer 生成控件树（按钮、滑条、scrollArea_lrc 等）。
     PlayerController *m_controller;  //播放控制器，由构造传入，与 playwidget.cpp 初始化列表一致。
