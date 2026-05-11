@@ -27,6 +27,8 @@ set(PROJECT_SOURCES
         playwidget.cpp
         playwidget.h
         playwidget.ui
+        turntablealbumwidget.cpp
+        turntablealbumwidget.h
         aicontroller.h
         aicontroller.cpp
         command.h

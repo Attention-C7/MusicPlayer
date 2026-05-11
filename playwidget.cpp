@@ -16,7 +16,6 @@
 #include <QMouseEvent>
 #include <QMessageBox>
 #include <QPainter>
-#include <QPainterPath>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollBar>
@@ -99,8 +98,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     ui->lbl_title->setText(QStringLiteral("-"));
     ui->lbl_artist->setText(QStringLiteral("<unknown>"));
     ui->lbl_album->setText(QStringLiteral("<unknown>"));
-    ui->lbl_albumArt->setText(QStringLiteral("♪"));
-    ui->lbl_albumArt->setPixmap(QPixmap());
     ui->lbl_title->setStyleSheet(QStringLiteral("background:transparent;"));
     ui->lbl_artist->setStyleSheet(QStringLiteral("background:transparent;"));
     ui->lbl_album->setStyleSheet(QStringLiteral("background:transparent;"));
@@ -152,9 +149,11 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     connect(m_controller, &PlayerController::playbackStateChanged, this, [this](QMediaPlayer::PlaybackState state) {
         if (state == QMediaPlayer::PlayingState) {
             ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/3pause.png")));
+            ui->turntableAlbum->setPlaying(true);
             startBeatEffect();
         } else {
             ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
+            ui->turntableAlbum->setPlaying(false);
             stopBeatEffect();
         }
     });
@@ -210,16 +209,14 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
 
     connect(m_controller, &PlayerController::albumArtChanged, this, [this](const QPixmap &pixmap) {
         if (pixmap.isNull()) {
-            ui->lbl_albumArt->setPixmap(QPixmap());
-            ui->lbl_albumArt->setText(QStringLiteral("♪"));
+            ui->turntableAlbum->setAlbumPixmap(QPixmap());
             m_bgPixmap = QPixmap();
             update();
             return;
         }
 
         updateBackground(pixmap);
-        ui->lbl_albumArt->setText(QString());
-        ui->lbl_albumArt->setPixmap(roundedAlbumArt(pixmap));
+        ui->turntableAlbum->setAlbumPixmap(pixmap);
     });
 
     connect(m_controller, &PlayerController::lrcLoaded, this, [this](const QMap<qint64, QString> &lyrics) {
@@ -322,6 +319,8 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
         m_pressDirection = 0;
         m_longPressTriggered = false;
     });
+
+    ui->turntableAlbum->setPlaying(m_controller->playbackState() == QMediaPlayer::PlayingState);
 
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
@@ -738,34 +737,6 @@ void PlayWidget::clearLrcLabels()
     m_lrcRows.clear();
     m_lrcTimesMs.clear();
     m_currentLrcIndex = -1;
-}
-
-QPixmap PlayWidget::roundedAlbumArt(const QPixmap &pixmap) const
-{
-    if (pixmap.isNull()) {
-        return QPixmap();
-    }
-
-    const QSize targetSize(160, 160);
-    const QPixmap scaled = pixmap.scaled(targetSize, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
-
-    QPixmap result(targetSize);
-    result.fill(Qt::transparent);
-
-    QPainter painter(&result);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-
-    QPainterPath path;
-    path.addRoundedRect(QRectF(0.0, 0.0, targetSize.width(), targetSize.height()), 12.0, 12.0);
-    painter.setClipPath(path);
-
-    const int offsetX = (scaled.width() - targetSize.width()) / 2;
-    const int offsetY = (scaled.height() - targetSize.height()) / 2;
-    painter.drawPixmap(-offsetX, -offsetY, scaled);
-    painter.end();
-
-    return result;
 }
 
 void PlayWidget::updateBackground(const QPixmap &pixmap)

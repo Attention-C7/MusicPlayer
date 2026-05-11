@@ -47,7 +47,7 @@
       <number>24</number>
      </property>
      <item>
-      <widget class="QLabel" name="lbl_albumArt">
+      <widget class="TurntableAlbumWidget" name="turntableAlbum">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -56,21 +56,15 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>160</width>
-         <height>160</height>
+         <width>220</width>
+         <height>220</height>
         </size>
        </property>
        <property name="maximumSize">
         <size>
-         <width>160</width>
-         <height>160</height>
+         <width>220</width>
+         <height>220</height>
         </size>
-       </property>
-       <property name="text">
-        <string>♪</string>
-       </property>
-       <property name="alignment">
-        <set>Qt::AlignCenter</set>
        </property>
       </widget>
      </item>
@@ -282,6 +276,13 @@
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>TurntableAlbumWidget</class>
+   <extends>QWidget</extends>
+   <header>turntablealbumwidget.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

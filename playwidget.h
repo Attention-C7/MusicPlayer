@@ -63,7 +63,6 @@ private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
     QString formatTime(qint64 ms) const;   //时间格式化：ms 转 mm:ss。与项目「时长用 qint64 毫秒」一致。
     void setPlayModeIcon(PlayMode mode);   //播放模式图标切换：根据 songinfo.h 里的 PlayMode 更新循环模式按钮图标。
-    QPixmap roundedAlbumArt(const QPixmap &pixmap) const;   //封面圆角处理：把封面 QPixmap 做成圆角，供标签或绘制使用。
     void updateLrcDisplay(qint64 position);   //歌词行滚动：传入当前播放时间，更新 m_lrcRows 中对应行的高亮。
     void buildLrcLabels();
     void clearLrcLabels();
