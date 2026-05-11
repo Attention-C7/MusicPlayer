@@ -141,7 +141,7 @@ void AiController::onNetworkReply(QNetworkReply *reply){
     //检查网络错误
     if (reply->error() != QNetworkReply::NoError){
         //abort触发的error不再重复报错
-        if (reply->error() != QNetworkReply::OperationalCanceledError){
+        if (reply->error() != QNetworkReply::OperationCanceledError){
             emit recognizeFailed(QStringLiteral("网络错误：") + reply->errorString());
         }
         return;
@@ -193,7 +193,9 @@ void AiController::onLlmRequestTimeout()
         return;
     }
 
-    auto *reply = qobject_cast<QNetworkReply *>(timer->property(QStringLiteral("llmReply")).value<QObject *>());
+    auto *reply = qobject_cast<QNetworkReply*>(
+        timer->property("llmReply")
+              .value<QObject*>());
     timer->deleteLater();
 
     if (reply == nullptr) {
