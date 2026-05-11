@@ -373,7 +373,7 @@ void PlayWidget::setSearchContext(
 {
     // 转发给VoiceInputWidget
     // VoiceInputWidget再转给AiController
-    if (m_voiceWidge) {
+    if (m_voiceWidget) {
         m_voiceWidget->setSearchContext(allSongs, artistMap, albumMap);
     }
 }

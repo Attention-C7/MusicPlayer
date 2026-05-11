@@ -58,7 +58,7 @@ private:
     void setOverlayAlpha(float alpha);  //设置 overlayAlpha 属性值，并触发更新。
 
     Ui::PlayWidget *ui;  //Designer 生成控件树（按钮、滑条、scrollArea_lrc 等）。
-    //PlayerController *m_controller;  //播放控制器，由构造传入，与 playwidget.cpp 初始化列表一致。
+    PlayerController *m_controller;  //播放控制器，由构造传入，与 playwidget.cpp 初始化列表一致。
     QPixmap m_bgPixmap;  //模糊背景图，用于绘制时叠加。
     QMap<qint64, QString> m_lrcMap;  //歌词时间戳→文本映射，与 m_lrcLabels 联动。
     int m_currentLrcIndex;  //当前高亮歌词行索引，避免每帧全表扫描（具体逻辑在 .cpp）。
