@@ -47,7 +47,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_sliderVolume(nullptr)
     , m_lblVolumePercent(nullptr)
     , m_btnVolumeMute(nullptr)
-    , m_tonearmDebounceTimer(new QTimer(this))
 {
     ui->setupUi(this);
     setAttribute(Qt::WA_TranslucentBackground, false);
@@ -62,9 +61,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
-    m_tonearmDebounceTimer->setSingleShot(true);
-    m_tonearmDebounceTimer->setInterval(110);
-    connect(m_tonearmDebounceTimer, &QTimer::timeout, this, &PlayWidget::applyTonearmPlaybackDebounced);
 
     m_beatTimer->setInterval(500);
     m_beatTimer->setSingleShot(false);
@@ -152,6 +148,7 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     });
 
     connect(m_controller, &PlayerController::playbackStateChanged, this, &PlayWidget::onControllerPlaybackStateChanged);
+    connect(m_controller, &PlayerController::sessionPlaybackActiveChanged, this, &PlayWidget::onSessionPlaybackActiveChanged);
 
     connect(m_controller, &PlayerController::playModeChanged, this, [this](PlayMode mode) {
         setPlayModeIcon(mode);
@@ -315,8 +312,8 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
         m_longPressTriggered = false;
     });
 
+    onSessionPlaybackActiveChanged(m_controller->sessionPlaybackActive());
     onControllerPlaybackStateChanged(m_controller->playbackState());
-    applyTonearmPlaybackDebounced();
 
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
@@ -326,21 +323,20 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
 void PlayWidget::onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState state)
 {
     if (state == QMediaPlayer::PlayingState) {
-        ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/3pause.png")));
         ui->turntableAlbum->setPlatterSpinning(true);
         startBeatEffect();
     } else {
-        ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
         ui->turntableAlbum->setPlatterSpinning(false);
         stopBeatEffect();
     }
-    m_tonearmDebounceTimer->start();
 }
 
-void PlayWidget::applyTonearmPlaybackDebounced()
+void PlayWidget::onSessionPlaybackActiveChanged(bool active)
 {
-    const bool onRecord = m_controller->playbackState() == QMediaPlayer::PlayingState;
-    ui->turntableAlbum->setTonearmOnRecord(onRecord);
+    ui->btn_playPause->setIcon(QIcon(active
+        ? QStringLiteral(":/icons/icon/3pause.png")
+        : QStringLiteral(":/icons/icon/2play.png")));
+    ui->turntableAlbum->setTonearmOnRecord(active);
 }
 
 void PlayWidget::startBeatEffect()

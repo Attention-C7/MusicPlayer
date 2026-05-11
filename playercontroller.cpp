@@ -59,6 +59,7 @@ void PlayerController::setPlaylist(QList<SongInfo> songs)
         m_currentIndex = -1;
         m_ctx = PlayContext{};
         emit currentIndexChanged(m_currentIndex);
+        emitSessionPlaybackActiveIfChanged(false);
         return;
     }
     if (m_currentIndex >= m_playlist.size()) {
@@ -125,6 +126,28 @@ void PlayerController::playSong(int index)
     playByIndex(index);
 }
 
+void PlayerController::requestPlay()
+{
+    if (m_playlist.isEmpty()) {
+        return;
+    }
+    if (m_currentIndex < 0 || m_currentIndex >= m_playlist.size()) {
+        playByIndex(0);
+        return;
+    }
+    m_player->play();
+    emitSessionPlaybackActiveIfChanged(true);
+}
+
+void PlayerController::requestPause()
+{
+    if (m_playlist.isEmpty()) {
+        return;
+    }
+    m_player->pause();
+    emitSessionPlaybackActiveIfChanged(false);
+}
+
 void PlayerController::playPause()
 {
     if (m_playlist.isEmpty()) {
@@ -137,10 +160,24 @@ void PlayerController::playPause()
     }
 
     if (m_player->playbackState() == QMediaPlayer::PlayingState) {
-        m_player->pause();
+        requestPause();
     } else {
-        m_player->play();
+        requestPlay();
     }
+}
+
+bool PlayerController::sessionPlaybackActive() const
+{
+    return m_sessionPlaybackActive;
+}
+
+void PlayerController::emitSessionPlaybackActiveIfChanged(bool active)
+{
+    if (m_sessionPlaybackActive == active) {
+        return;
+    }
+    m_sessionPlaybackActive = active;
+    emit sessionPlaybackActiveChanged(active);
 }
 
 void PlayerController::prev()
@@ -389,6 +426,8 @@ void PlayerController::playByIndex(int index)
     if (index < 0 || index >= m_playlist.size()) {
         return;
     }
+
+    emitSessionPlaybackActiveIfChanged(true);
 
     m_currentIndex = index;
     m_ctx.globalIndex = index;

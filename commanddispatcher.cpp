@@ -98,9 +98,13 @@ void CommandDispatcher::handlePlayback(const Command &cmd){
             break;
         
         case CommandAction::PlaybackPlay:
+            m_controller->requestPlay();
+            emit dispatchResult(true, QStringLiteral("已播放"));
+            break;
+
         case CommandAction::PlaybackPause:
-            m_controller->playPause();
-            emit dispatchResult(true, QStringLiteral("已切换：播放/暂停"));
+            m_controller->requestPause();
+            emit dispatchResult(true, QStringLiteral("已暂停"));
             break;
         
         case CommandAction::PlaybackSeek: {
@@ -122,7 +126,7 @@ void CommandDispatcher::handlePlayback(const Command &cmd){
             break;
     }
 }
-//PlaybackPlay和PlaybackPause共用同一个处理分支,因为底层都是playPause()切换
+//PlaybackPlay → requestPlay，PlaybackPause → requestPause（会话层与 QMediaPlayer 状态分离）
 //Seek的position从params取,转qint64
 //default空处理,dispatch已保证分发正确性
 

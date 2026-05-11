@@ -108,11 +108,14 @@ void VoiceInputWidget::handleCommand(const QString &cmd, const QString &param)
         return;
     }
 
-    if (cmd == QStringLiteral("play") || cmd == QStringLiteral("pause")) {
-        m_playerController->playPause();
-        ui->lbl_result->setText(cmd == QStringLiteral("play")
-                                    ? QStringLiteral("已执行：播放/暂停切换")
-                                    : QStringLiteral("已执行：播放/暂停切换"));
+    if (cmd == QStringLiteral("play")) {
+        m_playerController->requestPlay();
+        ui->lbl_result->setText(QStringLiteral("已执行：播放"));
+        return;
+    }
+    if (cmd == QStringLiteral("pause")) {
+        m_playerController->requestPause();
+        ui->lbl_result->setText(QStringLiteral("已执行：暂停"));
         return;
     }
 

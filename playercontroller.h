@@ -22,7 +22,14 @@ public:
     PlayContext currentContext() const;      //当前 m_ctx 快照（含 scopeList 副本）
 
     void playSong(int index); //播放指定索引的歌曲
-    void playPause(); //播放/暂停
+    void playPause(); //界面按钮：按当前 QMediaPlayer 状态切换播放/暂停
+    /** 语音/指令明确「播放」：只 resume，不与暂停共用切换语义 */
+    void requestPlay();
+    /** 语音/指令明确「暂停」 */
+    void requestPause();
+
+    /** 会话层是否在「播放意图」中（切歌时不因短暂 Stopped 抖动）；界面唱臂/按钮图标宜跟此状态 */
+    bool sessionPlaybackActive() const;
     void prev(); //上一曲
     void next(); //下一曲
     void seek(qint64 position); //seek 到指定位置（毫秒）,毫秒 定位；实现里会按 duration 夹紧
@@ -51,7 +58,8 @@ signals:
     void songChanged(SongInfo info);    //换歌；PlayWidget / ListWidget 更新标题、高亮等
     void positionChanged(qint64 position); //进度变化；PlayWidget 更新进度条。毫秒；驱动进度条与时间标签
     void durationChanged(qint64 duration); //时长变化；PlayWidget 更新总时长
-    void playbackStateChanged(QMediaPlayer::PlaybackState state); //播放状态变化；播放/暂停/停止 → 更新播放按钮图标等
+    void playbackStateChanged(QMediaPlayer::PlaybackState state); //QMediaPlayer 原始状态；转盘旋转等跟解码是否正在跑
+    void sessionPlaybackActiveChanged(bool active); //会话播放意图变化；跟 UI 唱臂、暂停按钮图标
     void playModeChanged(PlayMode mode); //播放模式变化；PlayWidget 更新循环模式按钮图标，ListWidget 里切换 Tab 刷新等
     void currentIndexChanged(int index); //当前曲目索引变化；PlayWidget 更新当前曲目标签，ListWidget 里高亮等
     void errorOccurred(QString message); //播放错误；弹窗提示用户
@@ -69,6 +77,7 @@ private:
     void loadLrc(const SongInfo &song); //加载歌词文件，生成时间轴映射
     void updateSongMetaData(); //从 QMediaPlayer 元数据刷新 SongInfo（与扫描阶段 TagLib 互补）
     void handleEndOfMedia(); //播放结束：单曲循环/列表循环/随机播放
+    void emitSessionPlaybackActiveIfChanged(bool active);
 
     QMediaPlayer *m_player; //Qt多媒体框架里的核心类，负责媒体文件的播放、暂停、停止、seek等操作。
     QAudioOutput *m_audioOutput; //Qt6 播放链路里 QMediaPlayer + QAudioOutput，头文件里成员指针需要完整类型（或前向声明 + 实现文件包含）
@@ -80,4 +89,5 @@ private:
     int m_seekDirection; //长按 seek 方向，1 向前，-1 向后
     bool m_muted; //触控静音键打开时为 true；setVolumePercent(>0) 会清除
     int m_volumePercentBeforeMute; //静音前音量，用于取消静音；默认 50
+    bool m_sessionPlaybackActive = false; //用户/指令意图：处于播放会话（切歌不改变 false）
 };
