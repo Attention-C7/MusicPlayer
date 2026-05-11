@@ -1,5 +1,6 @@
 #include "turntablealbumwidget.h"
 
+#include <QEasingCurve>
 #include <QEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -11,12 +12,19 @@ constexpr int kShadowMargin = 6;
 constexpr int kBaseCornerRadius = 22;
 constexpr qreal kMsPerRevolution = 14000.0;
 
+/** 唱臂绕支点转角：0° 针尖落在沟槽/盘面上，正值为顺时针抬起移向底座外侧（暂停位）。 */
+constexpr qreal kTonearmOnRecordDeg = 0.0;
+constexpr qreal kTonearmParkedDeg = 34.0;
+constexpr int kTonearmAnimMs = 850;
+
 } // namespace
 
 TurntableAlbumWidget::TurntableAlbumWidget(QWidget *parent)
     : QWidget(parent)
     , m_rotationAnim(new QVariantAnimation(this))
+    , m_tonearmAnim(new QVariantAnimation(this))
     , m_rotationDeg(0.0)
+    , m_tonearmDeg(kTonearmParkedDeg)
 {
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(false);
@@ -27,6 +35,11 @@ TurntableAlbumWidget::TurntableAlbumWidget(QWidget *parent)
     m_rotationAnim->setLoopCount(-1);
     connect(m_rotationAnim, &QVariantAnimation::valueChanged,
             this, &TurntableAlbumWidget::onRotationValueChanged);
+
+    m_tonearmAnim->setDuration(kTonearmAnimMs);
+    m_tonearmAnim->setEasingCurve(QEasingCurve::InOutCubic);
+    connect(m_tonearmAnim, &QVariantAnimation::valueChanged,
+            this, &TurntableAlbumWidget::onTonearmAngleChanged);
 }
 
 void TurntableAlbumWidget::setAlbumPixmap(const QPixmap &pixmap)
@@ -37,6 +50,8 @@ void TurntableAlbumWidget::setAlbumPixmap(const QPixmap &pixmap)
 
 void TurntableAlbumWidget::setPlaying(bool playing)
 {
+    animateTonearmTo(playing ? kTonearmOnRecordDeg : kTonearmParkedDeg);
+
     if (playing) {
         if (m_rotationAnim->state() == QAbstractAnimation::Paused) {
             m_rotationAnim->resume();
@@ -54,6 +69,23 @@ void TurntableAlbumWidget::onRotationValueChanged(const QVariant &value)
 {
     m_rotationDeg = static_cast<qreal>(value.toDouble());
     update();
+}
+
+void TurntableAlbumWidget::onTonearmAngleChanged(const QVariant &value)
+{
+    m_tonearmDeg = static_cast<qreal>(value.toDouble());
+    update();
+}
+
+void TurntableAlbumWidget::animateTonearmTo(qreal targetDeg)
+{
+    if (qAbs(m_tonearmDeg - targetDeg) < 0.05) {
+        return;
+    }
+    m_tonearmAnim->stop();
+    m_tonearmAnim->setStartValue(m_tonearmDeg);
+    m_tonearmAnim->setEndValue(targetDeg);
+    m_tonearmAnim->start();
 }
 
 void TurntableAlbumWidget::changeEvent(QEvent *event)
@@ -175,10 +207,11 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
     }
     painter.restore();
 
-    // 唱臂（叠在转盘之上）
+    // 唱臂（叠在转盘之上）；m_tonearmDeg 绕支点旋转，播放时落在盘面上，暂停时旋至盘面外
     painter.save();
     painter.translate(center);
     painter.translate(side * 0.28, -side * 0.38);
+    painter.rotate(m_tonearmDeg);
     QPainterPath arm;
     arm.moveTo(0, 0);
     arm.lineTo(-side * 0.06, side * 0.42);
