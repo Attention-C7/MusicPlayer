@@ -60,11 +60,9 @@ void TurntableAlbumWidget::setAlbumPixmap(const QPixmap &pixmap)
     update();
 }
 
-void TurntableAlbumWidget::setPlaying(bool playing)
+void TurntableAlbumWidget::setPlatterSpinning(bool spinning)
 {
-    animateTonearmTo(playing ? kTonearmOnRecordDeg : kTonearmParkedDeg);
-
-    if (playing) {
+    if (spinning) {
         if (m_rotationAnim->state() == QAbstractAnimation::Paused) {
             m_rotationAnim->resume();
         } else if (m_rotationAnim->state() != QAbstractAnimation::Running) {
@@ -75,6 +73,11 @@ void TurntableAlbumWidget::setPlaying(bool playing)
             m_rotationAnim->pause();
         }
     }
+}
+
+void TurntableAlbumWidget::setTonearmOnRecord(bool onRecord)
+{
+    animateTonearmTo(onRecord ? kTonearmOnRecordDeg : kTonearmParkedDeg);
 }
 
 void TurntableAlbumWidget::onRotationValueChanged(const QVariant &value)

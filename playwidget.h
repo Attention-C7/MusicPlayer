@@ -16,6 +16,8 @@ class QSlider;
 class QPushButton;
 
 //#include "aicontroller.h"  //AI控制器，用于处理语音识别、命令解析等，与 VoiceInputWidget 配合
+#include <QMediaPlayer>  //PlaybackState，唱臂防抖槽参数类型需完整枚举
+
 #include "playercontroller.h"  //播放控制器，用于控制播放器：播放、暂停、切换、seek等
 #include "songinfo.h"  //歌曲信息，用于存储歌曲元数据：标题、艺人、专辑、时长等。单曲元数据；setSearchContext 用 QList<SongInfo> 等。
 #include "voiceinputwidget.h"  //语音输入组件，用于处理语音输入：语音识别、命令解析等。语音输入 UI 成员指针类型需要完整类声明。
@@ -58,6 +60,8 @@ private slots:
     void onVolumeMuteButtonClicked();
     void onControllerVolumePercentChanged(int percent);
     void hideVolumePopupIfOpen();
+    void onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState state);
+    void applyTonearmPlaybackDebounced();
 
 private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
@@ -105,4 +109,5 @@ private:
     QSlider *m_sliderVolume;  //垂直音量条 0–100
     QLabel *m_lblVolumePercent;  //例如 50%
     QPushButton *m_btnVolumeMute;  //浮层底部静音切换
+    QTimer *m_tonearmDebounceTimer;  //切歌时播放器可能短暂 Stopped，防抖后再同步唱臂
 };
