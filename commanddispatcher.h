@@ -9,11 +9,16 @@
 #include "playercontroller.h"
 #include "songinfo.h"
 
+class QWidget;
+
 class CommandDispatcher : public QObject{
     Q_OBJECT
 
 public:
     explicit CommandDispatcher(PlayerController *controller, QObject *parent = nullptr);
+
+    //听力提示弹窗父控件（通常为 MusicPlayer）；语音调音量前确认用
+    void setVolumeWarningParent(QWidget *parent);
 
     //主调度入口
     void dispatch(const Command &cmd);
@@ -49,6 +54,7 @@ private:
     int findByAlbum(const QString &album) const;
 
     PlayerController *m_controller;
+    QWidget *m_volumeWarningParent;
     QList<SongInfo> m_allSongs;
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;

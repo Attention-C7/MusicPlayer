@@ -36,6 +36,8 @@ set(PROJECT_SOURCES
         commandvalidator.cpp
         commanddispatcher.h
         commanddispatcher.cpp
+        volumesafety.h
+        volumesafety.cpp
         voiceinputwidget.h
         voiceinputwidget.cpp
         voiceinputwidget.ui

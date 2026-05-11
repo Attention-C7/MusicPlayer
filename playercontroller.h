@@ -32,6 +32,7 @@ public:
     void adjustVolumePercent(int delta); //在 Current 上增减，自动夹紧到 0–100
     bool isMuted() const; //界面静音状态（与音量为 0 不同：语音设 0 不一定视为静音）
     void setMuted(bool muted); //静音：输出 0 并记忆上次音量；取消则恢复
+    int volumePercentBeforeMute() const; //静音前记忆的还原音量（用于取消静音前听力提示）
     void setPlayMode(PlayMode mode); //设置播放模式,设置 SingleLoop / FolderLoop / AllLoop / RandomPlay，变化时 emit playModeChanged
     int currentIndex() const; //当前曲目在全量表中的索引（与 m_ctx.globalIndex 一致，由 playByIndex / setContext 维护）
     int currentScopeIndex() const; //当前曲目在 m_ctx.scopeList 中的索引（界面「第几首」）
@@ -78,5 +79,5 @@ private:
     QTimer *m_seekTimer; //长按 seek 定时器
     int m_seekDirection; //长按 seek 方向，1 向前，-1 向后
     bool m_muted; //触控静音键打开时为 true；setVolumePercent(>0) 会清除
-    int m_volumePercentBeforeMute; //静音前音量，用于取消静音；默认 70
+    int m_volumePercentBeforeMute; //静音前音量，用于取消静音；默认 50
 };

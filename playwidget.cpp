@@ -1,6 +1,8 @@
 #include "playwidget.h"
 #include "ui_playwidget.h"
 
+#include "volumesafety.h"
+
 #include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
@@ -406,8 +408,8 @@ void PlayWidget::setupVolumePopup()
 
     m_sliderVolume = new QSlider(Qt::Vertical, m_volumePopup);
     m_sliderVolume->setRange(0, 100);
-    m_sliderVolume->setSingleStep(5);
-    m_sliderVolume->setPageStep(10);
+    m_sliderVolume->setSingleStep(1);
+    m_sliderVolume->setPageStep(1);
     m_sliderVolume->setTracking(true);
     m_sliderVolume->setMinimumHeight(124);
     m_sliderVolume->setMaximumWidth(36);
@@ -437,13 +439,15 @@ void PlayWidget::setupVolumePopup()
         "QFrame#frame_volumePopup { background: #ffffff; border-radius: 12px; "
         "border: 1px solid #d8e8dc; }"
         "QLabel { color: #2e7d4a; font-weight: 600; }"
-        "QSlider::groove:vertical { background: #e8eee9; width: 6px; border-radius: 3px; }"
+        "QSlider::groove:vertical { border: 1px solid #dde8df; width: 8px; "
+        "background: #ffffff; border-radius: 4px; }"
         "QSlider::handle:vertical { background: #3cb371; min-height: 16px; max-height: 16px; "
         "margin: 0 -8px; border-radius: 8px; border: 2px solid #ffffff; }"
-        "QSlider::sub-page:vertical { background: #3cb371; border-radius: 3px; }"
-        "QSlider::add-page:vertical { background: #e8eee9; border-radius: 3px; }"));
+        "QSlider::sub-page:vertical { background: #3cb371; border-radius: 3px; margin: 2px; }"
+        "QSlider::add-page:vertical { background: #ffffff; border-radius: 3px; margin: 2px; }"));
 
     connect(m_sliderVolume, &QSlider::valueChanged, this, &PlayWidget::onVolumeSliderValueChanged);
+    connect(m_sliderVolume, &QSlider::sliderReleased, this, &PlayWidget::onVolumeSliderReleased);
     connect(m_btnVolumeMute, &QPushButton::clicked, this, &PlayWidget::onVolumeMuteButtonClicked);
     connect(ui->btn_volume, &QPushButton::clicked, this, &PlayWidget::onVolumeButtonClicked);
     connect(m_controller, &PlayerController::volumePercentChanged, this,
@@ -498,12 +502,53 @@ void PlayWidget::onVolumeButtonClicked()
 void PlayWidget::onVolumeSliderValueChanged(int value)
 {
     m_lblVolumePercent->setText(QString::number(value) + QLatin1Char('%'));
-    m_controller->setVolumePercent(value);
+
+    const int applied = m_controller->volumePercent();
+    const int th = VolumeSafety::kWarningThresholdPercent;
+
+    if (value < th) {
+        m_controller->setVolumePercent(value);
+        return;
+    }
+    if (applied >= th) {
+        m_controller->setVolumePercent(value);
+        return;
+    }
+}
+
+void PlayWidget::onVolumeSliderReleased()
+{
+    if (m_sliderVolume == nullptr) {
+        return;
+    }
+    const int v = m_sliderVolume->value();
+    const int applied = m_controller->volumePercent();
+    const int th = VolumeSafety::kWarningThresholdPercent;
+
+    if (v >= th && applied < th) {
+        if (VolumeSafety::confirmHighVolumeIfNeeded(v, applied, this)) {
+            m_controller->setVolumePercent(v);
+        } else {
+            const QSignalBlocker blocker(m_sliderVolume);
+            m_sliderVolume->setValue(applied);
+            m_lblVolumePercent->setText(QString::number(applied) + QLatin1Char('%'));
+        }
+    }
 }
 
 void PlayWidget::onVolumeMuteButtonClicked()
 {
-    m_controller->setMuted(!m_controller->isMuted());
+    if (m_controller->isMuted()) {
+        const int restore = m_controller->volumePercentBeforeMute();
+        const int effectiveRestore = restore > 0 ? restore : 50;
+        const int curOut = m_controller->volumePercent();
+        if (!VolumeSafety::confirmHighVolumeIfNeeded(effectiveRestore, curOut, this)) {
+            return;
+        }
+        m_controller->setMuted(false);
+        return;
+    }
+    m_controller->setMuted(true);
 }
 
 void PlayWidget::onControllerVolumePercentChanged(int percent)

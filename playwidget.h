@@ -51,6 +51,7 @@ signals:
 private slots:
     void onVolumeButtonClicked();
     void onVolumeSliderValueChanged(int value);
+    void onVolumeSliderReleased();
     void onVolumeMuteButtonClicked();
     void onControllerVolumePercentChanged(int percent);
 

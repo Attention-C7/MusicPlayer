@@ -1,5 +1,6 @@
 #include "musicplayer.h"
 #include "./ui_musicplayer.h"
+#include "commanddispatcher.h"
 #include "voiceinputwidget.h"
 #include <QPropertyAnimation>
 #include <QEasingCurve>
@@ -41,6 +42,7 @@ MusicPlayer::MusicPlayer(QWidget *parent)   //构造函数，初始化UI对象�
         m_listWidget,
         &ListWidget::playFromPath);*/
     connect(m_listWidget, &ListWidget::searchContextUpdated, m_aiController,&AiController::setSearchContext);
+    m_aiController->dispatcher()->setVolumeWarningParent(this);
     connect(m_aiController->dispatcher(), &CommandDispatcher::showListRequested, this, &MusicPlayer::showList);
     connect(m_aiController->dispatcher(), &CommandDispatcher::backToPlayerRequested, this, &MusicPlayer::hideList);
     VoiceInputWidget *voiceWidget = m_playWidget->voiceInputWidget();

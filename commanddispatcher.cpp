@@ -1,5 +1,8 @@
 #include "commanddispatcher.h"
 
+#include "volumesafety.h"
+
+#include <QWidget>
 #include <QtGlobal>
 
 namespace {
@@ -7,9 +10,16 @@ constexpr int kVolumeStepPercent = 10;
 }
 
 CommandDispatcher::CommandDispatcher(PlayerController *controller, QObject *parent)
-    : QObject(parent), m_controller(controller){
-        //成员已通过初始化列表赋值，无需额外操作
-    }
+    : QObject(parent)
+    , m_controller(controller)
+    , m_volumeWarningParent(nullptr)
+{
+}
+
+void CommandDispatcher::setVolumeWarningParent(QWidget *parent)
+{
+    m_volumeWarningParent = parent;
+}
 
 
 void CommandDispatcher::setSearchContext(
@@ -160,12 +170,19 @@ void CommandDispatcher::handleMusic(const Command &cmd){
 
 void CommandDispatcher::handleVolume(const Command &cmd){
     switch (cmd.action){
-        case CommandAction::VolumeUp:
+        case CommandAction::VolumeUp: {
+            const int cur = m_controller->volumePercent();
+            const int next = qMin(100, cur + kVolumeStepPercent);
+            if (!VolumeSafety::confirmHighVolumeIfNeeded(next, cur, m_volumeWarningParent)) {
+                emit dispatchResult(false, QStringLiteral("已取消增大音量"));
+                return;
+            }
             m_controller->adjustVolumePercent(kVolumeStepPercent);
             emit dispatchResult(
                 true,
                 QStringLiteral("音量：%1%").arg(m_controller->volumePercent()));
             break;
+        }
 
         case CommandAction::VolumeDown:
             m_controller->adjustVolumePercent(-kVolumeStepPercent);
@@ -177,6 +194,11 @@ void CommandDispatcher::handleVolume(const Command &cmd){
             const int vol = cmd.params
                               .value(QStringLiteral("volume"))
                               .toInt();
+            const int cur = m_controller->volumePercent();
+            if (!VolumeSafety::confirmHighVolumeIfNeeded(vol, cur, m_volumeWarningParent)) {
+                emit dispatchResult(false, QStringLiteral("已取消设置音量"));
+                return;
+            }
             m_controller->setVolumePercent(vol);
             emit dispatchResult(
                 true,

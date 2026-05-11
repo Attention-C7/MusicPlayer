@@ -49,7 +49,7 @@ PlayerController::PlayerController(QObject *parent)
         }
     });
 
-    emit volumePercentChanged(volumePercent());
+    setVolumePercent(50);
 }
 
 void PlayerController::setPlaylist(QList<SongInfo> songs)
@@ -270,6 +270,11 @@ bool PlayerController::isMuted() const
     return m_muted;
 }
 
+int PlayerController::volumePercentBeforeMute() const
+{
+    return m_volumePercentBeforeMute;
+}
+
 void PlayerController::setMuted(bool muted)
 {
     if (m_muted == muted) {
@@ -286,7 +291,7 @@ void PlayerController::setMuted(bool muted)
         return;
     }
     m_muted = false;
-    const int restore = m_volumePercentBeforeMute > 0 ? m_volumePercentBeforeMute : 70;
+    const int restore = m_volumePercentBeforeMute > 0 ? m_volumePercentBeforeMute : 50;
     m_audioOutput->setVolume(static_cast<float>(restore) / 100.0f);
     emit volumePercentChanged(volumePercent());
 }
