@@ -85,7 +85,10 @@ target_link_libraries(MusicPlayer PRIVATE
     ${TAGLIB_LIBRARIES}
 )
 
-target_include_directories(MusicPlayer PRIVATE ${TAGLIB_INCLUDE_DIRS})
+target_include_directories(MusicPlayer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${TAGLIB_INCLUDE_DIRS}
+)
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
 # If you are developing for iOS or macOS you should consider setting an
