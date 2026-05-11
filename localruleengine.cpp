@@ -18,6 +18,8 @@ QMap<QString, CommandAction> LocalRuleEngine::buildKeywordMap(){
     map["返回播放|关闭列表|回到播放|收起列表|隐藏列表|退出列表|返回播放器|close list|hide list|back to player"] = CommandAction::UiHideList;
     map["音量大|音量调大|大声|louder|音量加"] = CommandAction::VolumeUp;
     map["音量小|音量调小|小声|quieter|音量减"] = CommandAction::VolumeDown;
+    map["静音|关掉声音|关闭声音|无声|mute"] = CommandAction::VolumeMute;
+    map["取消静音|打开声音|恢复声音|解除静音|unmute"] = CommandAction::VolumeUnmute;
 
     return map;
 }

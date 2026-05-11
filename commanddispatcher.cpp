@@ -205,6 +205,32 @@ void CommandDispatcher::handleVolume(const Command &cmd){
                 QStringLiteral("音量已设为 %1%").arg(m_controller->volumePercent()));
             break;
         }
+        case CommandAction::VolumeMute:
+            if (m_controller->isMuted()) {
+                emit dispatchResult(true, QStringLiteral("已是静音"));
+                break;
+            }
+            m_controller->setMuted(true);
+            emit dispatchResult(true, QStringLiteral("已静音"));
+            break;
+        case CommandAction::VolumeUnmute:
+            if (!m_controller->isMuted()) {
+                emit dispatchResult(true, QStringLiteral("当前未静音"));
+                break;
+            }
+            {
+                const int restore = m_controller->volumePercentBeforeMute();
+                const int effectiveRestore = restore > 0 ? restore : 50;
+                const int curOut = m_controller->volumePercent();
+                if (!VolumeSafety::confirmHighVolumeIfNeeded(
+                        effectiveRestore, curOut, m_volumeWarningParent)) {
+                    emit dispatchResult(false, QStringLiteral("已取消取消静音"));
+                    break;
+                }
+                m_controller->setMuted(false);
+                emit dispatchResult(true, QStringLiteral("已取消静音"));
+            }
+            break;
         default:
             break;
     }

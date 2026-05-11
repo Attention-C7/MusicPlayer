@@ -16,6 +16,8 @@ enum class CommandAction {
     VolumeUp,
     VolumeDown,
     VolumeSet,
+    VolumeMute,
+    VolumeUnmute,
     //Playlist:列表与播放模式
     PlaylistShuffle,
     PlaylistLoopSingle,
@@ -64,7 +66,9 @@ struct Command {
     bool isVolumeAction() const {
         return action == CommandAction::VolumeUp 
             || action == CommandAction::VolumeDown
-            || action == CommandAction::VolumeSet;
+            || action == CommandAction::VolumeSet
+            || action == CommandAction::VolumeMute
+            || action == CommandAction::VolumeUnmute;
     }
 
     bool isPlaylistAction() const {

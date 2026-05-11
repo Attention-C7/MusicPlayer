@@ -93,6 +93,7 @@ void AiController::sendToLLM(const QString &input){
         "playback.seek（params.position 为毫秒绝对位置，或 params.offsetMs 为相对当前进度的毫秒偏移）\n"
         "music.play / music.search（需 target：type 为 artist / album / title 之一，keyword 为关键词）\n"
         "volume.up / volume.down / volume.set（params.volume 为 0-100 整数）\n"
+        "volume.mute / volume.unmute（静音 / 取消静音，与界面静音键一致）\n"
         "playlist.shuffle / playlist.loop_single / playlist.loop_all / playlist.loop_folder\n"
         "ui.show_list（打开侧栏列表，等同点「列表」）/ ui.hide_list（返回全屏播放，等同列表内返回）\n"
         "格式示例：{\"version\":\"1.0\",\"action\":\"volume.set\","
@@ -257,6 +258,8 @@ CommandAction AiController::actionStringToEnum(const QString &actionStr){
         {"volume.up", CommandAction::VolumeUp},
         {"volume.down", CommandAction::VolumeDown},
         {"volume.set", CommandAction::VolumeSet},
+        {"volume.mute", CommandAction::VolumeMute},
+        {"volume.unmute", CommandAction::VolumeUnmute},
         {"playlist.shuffle", CommandAction::PlaylistShuffle},
         {"playlist.loop_single", CommandAction::PlaylistLoopSingle},
         {"playlist.loop_all", CommandAction::PlaylistLoopAll},
