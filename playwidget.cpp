@@ -450,8 +450,9 @@ void PlayWidget::setupVolumePopup()
         "QSlider::handle:vertical { background: #3cb371; min-height: 32px; max-height: 32px; "
         "min-width: 32px; max-width: 32px; margin: -14px -12px; border-radius: 16px; "
         "border: 3px solid #ffffff; }"
-        "QSlider::sub-page:vertical { background: #3cb371; border-radius: 7px; }"
-        "QSlider::add-page:vertical { background: #ffffff; border-radius: 7px; }"));
+        // Windows/Fusion 等竖条上，sub-page 实际画在手柄上方、add-page 在下方，与文档命名相反时需对调色
+        "QSlider::sub-page:vertical { background: #ffffff; border-radius: 7px; }"
+        "QSlider::add-page:vertical { background: #3cb371; border-radius: 7px; }"));
 
     connect(m_sliderVolume, &QSlider::valueChanged, this, &PlayWidget::onVolumeSliderValueChanged);
     connect(m_sliderVolume, &QSlider::sliderReleased, this, &PlayWidget::onVolumeSliderReleased);
