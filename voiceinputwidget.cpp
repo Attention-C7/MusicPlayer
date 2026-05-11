@@ -40,9 +40,14 @@ VoiceInputWidget::VoiceInputWidget(
 
     connect(ui->btn_send, &QPushButton::clicked, this, &VoiceInputWidget::onSendClicked);
 
-    connect(m_aiController, &AiController::recognizing, this, &VoiceInputWidget::onRecognizing);
-    connect(m_aiController, &AiController::recognizeFailed, this, &VoiceInputWidget::onRecognizeFailed);
-    connect(m_aiController->dispatcher(), &CommandDispatcher::dispatchResult, this, &VoiceInputWidget::onDispatchResult);
+    if (m_aiController != nullptr) {
+        connect(m_aiController, &AiController::recognizing, this, &VoiceInputWidget::onRecognizing);
+        connect(m_aiController, &AiController::recognizeFailed, this, &VoiceInputWidget::onRecognizeFailed);
+        CommandDispatcher *dispatcher = m_aiController->dispatcher();
+        if (dispatcher != nullptr) {
+            connect(dispatcher, &CommandDispatcher::dispatchResult, this, &VoiceInputWidget::onDispatchResult);
+        }
+    }
     //connect(m_aiController, &AiController::commandReady, this, &VoiceInputWidget::handleCommand);
     /*connect(m_aiController, &AiController::recognizeFailed, this, [this](const QString &error) {
         if (error.contains(QStringLiteral("未能及时响应"))) {

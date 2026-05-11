@@ -33,5 +33,4 @@ private:
     ListWidget *m_listWidget;  //列表界面
     QPropertyAnimation *m_listAnimation;  //列表动画
     AiController *m_aiController;  //AI控制器
-    VoiceInputWidget *m_voiceWidget;  //语音输入界面
 };

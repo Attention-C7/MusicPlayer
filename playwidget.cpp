@@ -11,12 +11,12 @@
 #include <QSpacerItem>
 #include <QVBoxLayout>
 
-PlayWidget::PlayWidget(PlayerController *controller, QWidget *parent)
+PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::PlayWidget)
     , m_currentLrcIndex(-1)
     , m_controller(controller)
-    //, m_aiController(new AiController(this))
+    , m_aiController(aiController)
     , m_voiceWidget(nullptr)
     , m_allSongs()
     , m_artistMap()
