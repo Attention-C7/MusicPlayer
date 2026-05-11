@@ -2,6 +2,7 @@
 
 #include <QLabel>   //标签，用于显示文本；歌词行等
 #include <QMap>  //映射，用于存储键值对：歌词时间戳→文本、艺人/专辑索引
+#include <QVector>  //与歌词行同序的时间戳列表，供点击跳转与进度查找
 #include <QPixmap>  //像素图，用于显示图像：封面与背景
 #include <QPropertyAnimation>  //属性动画，用于实现动画效果：节拍脉冲
 #include <QTimer>  //定时器，用于实现定时功能：节拍定时、长按检测等
@@ -28,6 +29,7 @@ class PlayWidget;
 QT_END_NAMESPACE
 
 class AiController;
+class LyricLineRow;
 
 class PlayWidget : public QWidget   //PlayWidget 继承自 QWidget，作为可布局、可绘制的整块播放界面。
 {
@@ -62,7 +64,7 @@ private:
     QString formatTime(qint64 ms) const;   //时间格式化：ms 转 mm:ss。与项目「时长用 qint64 毫秒」一致。
     void setPlayModeIcon(PlayMode mode);   //播放模式图标切换：根据 songinfo.h 里的 PlayMode 更新循环模式按钮图标。
     QPixmap roundedAlbumArt(const QPixmap &pixmap) const;   //封面圆角处理：把封面 QPixmap 做成圆角，供标签或绘制使用。
-    void updateLrcDisplay(qint64 position);   //歌词行滚动：传入当前播放时间，更新 m_lrcLabels 中对应行的颜色。
+    void updateLrcDisplay(qint64 position);   //歌词行滚动：传入当前播放时间，更新 m_lrcRows 中对应行的高亮。
     void buildLrcLabels();
     void clearLrcLabels();
     void updateBackground(const QPixmap &pixmap);  //背景图模糊处理：传入封面 QPixmap，生成模糊背景图，供绘制使用。
@@ -83,9 +85,10 @@ private:
     Ui::PlayWidget *ui;  //Designer 生成控件树（按钮、滑条、scrollArea_lrc 等）。
     PlayerController *m_controller;  //播放控制器，由构造传入，与 playwidget.cpp 初始化列表一致。
     QPixmap m_bgPixmap;  //模糊背景图，用于绘制时叠加。
-    QMap<qint64, QString> m_lrcMap;  //歌词时间戳→文本映射，与 m_lrcLabels 联动。
+    QMap<qint64, QString> m_lrcMap;  //歌词时间戳→文本映射，与 m_lrcRows 联动。
+    QVector<qint64> m_lrcTimesMs;   //buildLrcLabels 填充，与 m_lrcRows 同序；updateLrcDisplay 用它二分，单调播放时先判断区间再 upper_bound。
     int m_currentLrcIndex;  //当前高亮歌词行索引，避免每帧全表扫描（具体逻辑在 .cpp）。
-    QList<QLabel*> m_lrcLabels;  //歌滚动歌词区里多行 QLabel*，动态增删。
+    QList<LyricLineRow *> m_lrcRows;  //歌词行控件：悬停左侧显示播放与时间，点击跳转。
     AiController *m_aiController;  //AI 相关逻辑，构造里 new AiController(this)，父对象为 PlayWidget。
     VoiceInputWidget *m_voiceWidget;  //语音输入条；构造里再 new，并塞进 ui->verticalLayout_main。
     QList<SongInfo> m_allSongs;  //与 setSearchContext 参数对应的缓存，供语音部件检索。

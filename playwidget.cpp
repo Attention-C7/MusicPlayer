@@ -1,7 +1,10 @@
 #include "playwidget.h"
 #include "ui_playwidget.h"
 
+#include "lyriclinerow.h"
 #include "volumesafety.h"
+
+#include <algorithm>
 
 #include <QCoreApplication>
 #include <QEvent>
@@ -606,7 +609,6 @@ void PlayWidget::resizeEvent(QResizeEvent *event)
 
 bool PlayWidget::eventFilter(QObject *watched, QEvent *event)
 {
-    Q_UNUSED(watched);
     if (m_volumePopup == nullptr || !m_volumePopup->isVisible()) {
         return false;
     }
@@ -665,38 +667,40 @@ void PlayWidget::setPlayModeIcon(PlayMode mode)
 
 void PlayWidget::updateLrcDisplay(qint64 position)
 {
-    if (m_lrcMap.isEmpty() || m_lrcLabels.isEmpty()) {
+    if (m_lrcTimesMs.isEmpty() || m_lrcRows.isEmpty()) {
         return;
     }
 
-    const QList<qint64> keys = m_lrcMap.keys();
-    int targetIndex = -1;
-    for (int i = 0; i < keys.size(); ++i) {
-        if (keys[i] <= position) {
-            targetIndex = i;
-        } else {
-            break;
+    const int n = m_lrcTimesMs.size();
+
+    // 快进路径：进度单调递增时多数帧仍落在「当前行～下一行」区间内，避免每帧 upper_bound。
+    if (m_currentLrcIndex >= 0 && m_currentLrcIndex < n) {
+        const qint64 lineStartMs = m_lrcTimesMs[m_currentLrcIndex];
+        if (position >= lineStartMs) {
+            const bool lastLine = (m_currentLrcIndex + 1 >= n);
+            if (lastLine || position < m_lrcTimesMs[m_currentLrcIndex + 1]) {
+                return;
+            }
         }
     }
 
-    if (targetIndex < 0 || targetIndex >= m_lrcLabels.size()) {
+    const auto it = std::upper_bound(m_lrcTimesMs.cbegin(), m_lrcTimesMs.cend(), position);
+    const int targetIndex = static_cast<int>(it - m_lrcTimesMs.cbegin()) - 1;
+
+    if (targetIndex < 0 || targetIndex >= m_lrcRows.size()) {
         return;
     }
     if (targetIndex == m_currentLrcIndex) {
         return;
     }
 
-    if (m_currentLrcIndex >= 0 && m_currentLrcIndex < m_lrcLabels.size()) {
-        m_lrcLabels[m_currentLrcIndex]->setStyleSheet(
-            QStringLiteral("color:#888888; font-size:13px; font-weight:normal; background:transparent;")
-        );
+    if (m_currentLrcIndex >= 0 && m_currentLrcIndex < m_lrcRows.size()) {
+        m_lrcRows[m_currentLrcIndex]->setActiveLine(false);
     }
 
     m_currentLrcIndex = targetIndex;
-    QLabel *current = m_lrcLabels[m_currentLrcIndex];
-    current->setStyleSheet(
-        QStringLiteral("color:#ffffff; font-size:15px; font-weight:bold; background:transparent;")
-    );
+    LyricLineRow *current = m_lrcRows[m_currentLrcIndex];
+    current->setActiveLine(true);
 
     const int centerY = current->y() + (current->height() / 2);
     const int viewportHalf = ui->scrollArea_lrc->viewport()->height() / 2;
@@ -707,13 +711,14 @@ void PlayWidget::buildLrcLabels()
 {
     QVBoxLayout *layout = ui->verticalLayout_lrc;
     const QList<qint64> keys = m_lrcMap.keys();
+    m_lrcTimesMs.clear();
+    m_lrcTimesMs.reserve(keys.size());
     for (qint64 key : keys) {
-        QLabel *label = new QLabel(m_lrcMap.value(key), ui->scrollAreaWidgetContents_lrc);
-        label->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
-        label->setWordWrap(true);
-        label->setStyleSheet(QStringLiteral("color:#888888; font-size:13px; font-weight:normal; background:transparent;"));
-        layout->addWidget(label);
-        m_lrcLabels.append(label);
+        m_lrcTimesMs.append(key);
+        auto *row = new LyricLineRow(key, formatTime(key), m_lrcMap.value(key), ui->scrollAreaWidgetContents_lrc);
+        connect(row, &LyricLineRow::seekRequested, m_controller, &PlayerController::seek);
+        layout->addWidget(row);
+        m_lrcRows.append(row);
     }
     layout->addStretch();
 }
@@ -730,7 +735,8 @@ void PlayWidget::clearLrcLabels()
             delete item;
         }
     }
-    m_lrcLabels.clear();
+    m_lrcRows.clear();
+    m_lrcTimesMs.clear();
     m_currentLrcIndex = -1;
 }
 

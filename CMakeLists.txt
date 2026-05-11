@@ -46,6 +46,8 @@ set(PROJECT_SOURCES
         listwidget.ui
         lrcparser.cpp
         lrcparser.h
+        lyriclinerow.cpp
+        lyriclinerow.h
         filescanworker.cpp
         filescanworker.h
         resources.qrc
