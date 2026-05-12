@@ -43,6 +43,8 @@ private:
     qint64 m_lastBeatWallMs = 0;
 
     uint_t m_sampleRate = 0;
+    /** aubio 引擎有效 hop 计数；重建后用于前若干 hop 仅预热、不参与 hit 判定。 */
+    int m_tempoWarmupHopCount = 0;
 
     /** aubio 窗长（FFT）；须与 new_aubio_tempo 第二参一致。 */
     static constexpr uint_t WIN_SIZE = 2048;

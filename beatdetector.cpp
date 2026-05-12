@@ -183,6 +183,7 @@ void BeatDetector::releaseAnalysisEngine()
     m_sampleRate = 0;
     m_pending.clear();
     m_lastBeatWallMs = 0;
+    m_tempoWarmupHopCount = 0;
 }
 
 bool BeatDetector::ensureAnalysisEngine(int sampleRate)
@@ -217,6 +218,10 @@ bool BeatDetector::ensureAnalysisEngine(int sampleRate)
     m_outputBuf = new_fvec(2);
     if (m_outputBuf == nullptr) {
         qDebug() << "[Beat] ERROR: outputBuf init FAILED";
+    } else {
+        /** aubio_tempo_do 要求输出 fvec 至少 2 个元素（见 aubio 文档）。 */
+        qDebug() << "[Beat] outputBuf OK size=" << static_cast<int>(m_outputBuf->length)
+                 << "(expected 2)";
     }
 
     if (m_aubioTempo == nullptr || m_inputBuf == nullptr || m_outputBuf == nullptr) {
@@ -289,7 +294,22 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         qDebug() << "[Beat] feeding chunk, inputBuf->length=" << static_cast<int>(m_inputBuf->length)
                  << "pending size before=" << m_pending.size();
 
+        qDebug() << "[Beat] inputBuf before tempo_do:"
+                 << static_cast<double>(m_inputBuf->data[0]) << static_cast<double>(m_inputBuf->data[1])
+                 << static_cast<double>(m_inputBuf->data[2]) << static_cast<double>(m_inputBuf->data[3]);
+
         aubio_tempo_do(m_aubioTempo, m_inputBuf, m_outputBuf);
+
+        qDebug() << "[Beat] outputBuf[0]=" << static_cast<double>(m_outputBuf->data[0])
+                 << "outputBuf[1]=" << static_cast<double>(m_outputBuf->data[1]);
+
+        ++m_tempoWarmupHopCount;
+        /** 前 100 个 hop 仅预热 aubio，不解析 hit/BPM 防抖（outputBuf[0] 常长期为 0 属正常）。 */
+        static constexpr int kAubioTempoWarmupHops = 100;
+        if (m_tempoWarmupHopCount <= kAubioTempoWarmupHops) {
+            m_pending.remove(0, hop);
+            continue;
+        }
 
         const bool beatPickHit = (m_outputBuf->data[0] != static_cast<smpl_t>(0));
         const float bpmRaw = static_cast<float>(aubio_tempo_get_bpm(m_aubioTempo));
