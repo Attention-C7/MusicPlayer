@@ -2,6 +2,7 @@
 
 #include <QAudioBuffer>
 #include <QAudioFormat>
+#include <QDateTime>
 #include <QDebug>
 
 #include <cstring>
@@ -156,8 +157,27 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         aubio_tempo_do(m_tempo, m_inputBuf, m_outputBuf);
 
         if (m_outputBuf->data[0] != static_cast<smpl_t>(0)) {
-            qDebug() << "[aubio] beat! BPM=" << aubio_tempo_get_bpm(m_tempo);
-            emit beatDetected();
+            const float conf = aubio_tempo_get_confidence(m_tempo);
+            if (conf >= 0.15f) {
+                float bpm = aubio_tempo_get_bpm(m_tempo);
+                if (bpm > 150.0f) {
+                    bpm /= 2.0f;
+                }
+
+                int minInterval = 0;
+                if (bpm > 0.0f) {
+                    minInterval = static_cast<int>(60000.0f / bpm * 0.8f);
+                }
+
+                const qint64 now = QDateTime::currentMSecsSinceEpoch();
+                const bool tooSoon = (m_lastBeatTime != 0 && minInterval > 0
+                    && (now - m_lastBeatTime) < static_cast<qint64>(minInterval));
+                if (!tooSoon) {
+                    m_lastBeatTime = now;
+                    qDebug() << "[aubio] beat! BPM=" << bpm << "conf=" << conf;
+                    emit beatDetected();
+                }
+            }
         }
 
         m_pending.remove(0, hop);

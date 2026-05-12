@@ -10,8 +10,8 @@
 class QAudioBuffer;
 
 /**
- * 使用 aubio 节拍跟踪：解码 PCM 为 float，按 hop 送入 new_aubio_tempo；
- * 与 QMediaPlayer 实际采样率不一致时（固定 44100）节拍精度会受影响，部署前宜对齐或重采样。
+ * 使用 aubio 节拍跟踪：单声道 float 按 hop 送入 new_aubio_tempo（WIN/HOP 见常量）；
+ * 对 aubio 输出做置信度过滤，并按 BPM（>150 折半）推算最小间隔防抖假拍。
  */
 class BeatDetector : public QObject
 {
@@ -31,8 +31,9 @@ private:
     fvec_t *m_inputBuf = nullptr;
     fvec_t *m_outputBuf = nullptr;
     QVector<float> m_pending;
+    qint64 m_lastBeatTime = 0;
 
-    static constexpr uint_t HOP_SIZE = 512;
-    static constexpr uint_t WIN_SIZE = 1024;
+    static constexpr uint_t HOP_SIZE = 256;
+    static constexpr uint_t WIN_SIZE = 2048;
     static constexpr uint_t SAMPLE_RATE = 44100;
 };
