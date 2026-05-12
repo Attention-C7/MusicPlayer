@@ -13,6 +13,7 @@
 #include <QPixmap>
 #include <QRadialGradient>
 #include <QScreen>
+#include <QEasingCurve>
 #include <QMetaObject>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -21,7 +22,10 @@
 namespace {
 
 constexpr int kLyricFontPx = 48;
-constexpr int kBeatAnimMs = 150;
+constexpr int kBeatWarmMs = 140;
+constexpr int kFlashDecayMs = 220;
+constexpr float kFlashPeak = 0.62f;
+constexpr float kWarmPulsePeak = 0.12f;
 constexpr int kLyricFadeMs = 600;
 constexpr int kCloseBtnSize = 48;
 constexpr int kCloseBtnMargin = 16;
@@ -50,6 +54,7 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     : QWidget(parent)
     , m_lyricAnim(new QPropertyAnimation(this, "lyricAlpha", this))
     , m_beatAnim(new QPropertyAnimation(this, "overlayAlpha", this))
+    , m_flashAnim(new QPropertyAnimation(this, "flashAlpha", this))
     , m_gradTop(80, 40, 30)
     , m_gradBottom(40, 20, 50)
 {
@@ -63,9 +68,15 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     m_lyricAnim->setStartValue(0.0f);
     m_lyricAnim->setEndValue(1.0f);
 
-    m_beatAnim->setDuration(kBeatAnimMs);
-    m_beatAnim->setStartValue(0.45f);
+    m_beatAnim->setDuration(kBeatWarmMs);
+    m_beatAnim->setStartValue(kWarmPulsePeak);
     m_beatAnim->setEndValue(0.0f);
+    m_beatAnim->setEasingCurve(QEasingCurve::OutQuad);
+
+    m_flashAnim->setDuration(kFlashDecayMs);
+    m_flashAnim->setStartValue(0.0f);
+    m_flashAnim->setEndValue(0.0f);
+    m_flashAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_closeButton = new QPushButton(QStringLiteral("×"), this);
     m_closeButton->setObjectName(QStringLiteral("beatLyricClose"));
@@ -75,9 +86,9 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     m_closeButton->setFlat(true);
     m_closeButton->setStyleSheet(QStringLiteral(
         "QPushButton#beatLyricClose {"
-        "background-color: rgba(0, 0, 0, 100);"
-        "color: rgba(255, 255, 255, 200);"
-        "border: 1px solid rgba(255, 255, 255, 90);"
+        "background-color: rgba(0, 0, 0, 130);"
+        "color: rgba(255, 255, 255, 240);"
+        "border: 2px solid rgba(255, 255, 255, 200);"
         "border-radius: 24px;"
         "font-size: 26px;"
         "font-weight: bold;"
@@ -157,6 +168,17 @@ void BeatLyricWidget::setOverlayAlpha(float alpha)
     update();
 }
 
+float BeatLyricWidget::flashAlpha() const
+{
+    return m_flashAlpha;
+}
+
+void BeatLyricWidget::setFlashAlpha(float alpha)
+{
+    m_flashAlpha = qBound(0.0f, alpha, 1.0f);
+    update();
+}
+
 void BeatLyricWidget::updateWarmGradientFromCover(const QPixmap &cover)
 {
     if (cover.isNull()) {
@@ -199,15 +221,23 @@ void BeatLyricWidget::updateWarmGradientFromCover(const QPixmap &cover)
 
 void BeatLyricWidget::onBeat()
 {
-    if (m_beatAnim == nullptr) {
-        return;
+    if (m_flashAnim != nullptr) {
+        m_flashAnim->stop();
+        setFlashAlpha(kFlashPeak);
+        m_flashAnim->setStartValue(kFlashPeak);
+        m_flashAnim->setEndValue(0.0f);
+        m_flashAnim->setDuration(kFlashDecayMs);
+        m_flashAnim->start();
     }
-    m_beatAnim->stop();
-    setOverlayAlpha(0.45f);
-    m_beatAnim->setStartValue(0.45f);
-    m_beatAnim->setEndValue(0.0f);
-    m_beatAnim->setDuration(kBeatAnimMs);
-    m_beatAnim->start();
+
+    if (m_beatAnim != nullptr) {
+        m_beatAnim->stop();
+        setOverlayAlpha(kWarmPulsePeak);
+        m_beatAnim->setStartValue(kWarmPulsePeak);
+        m_beatAnim->setEndValue(0.0f);
+        m_beatAnim->setDuration(kBeatWarmMs);
+        m_beatAnim->start();
+    }
 }
 
 void BeatLyricWidget::onLyricLineChanged(int lineIndex, const QString &text)
@@ -230,6 +260,15 @@ void BeatLyricWidget::onLyricLineChanged(int lineIndex, const QString &text)
         m_lyricAnim->start();
     } else {
         m_line2 = text;
+    }
+
+    const QString active = !m_line2.isEmpty() ? m_line2 : m_line1;
+    if (active.size() >= 2) {
+        m_watermarkText = active.right(2);
+    } else if (!active.isEmpty()) {
+        m_watermarkText = active;
+    } else {
+        m_watermarkText.clear();
     }
 
     update();
@@ -273,11 +312,6 @@ void BeatLyricWidget::keyPressEvent(QKeyEvent *event)
 
 void BeatLyricWidget::mousePressEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton) {
-        closeWidget();
-        event->accept();
-        return;
-    }
     QWidget::mousePressEvent(event);
 }
 
@@ -289,30 +323,60 @@ void BeatLyricWidget::paintEvent(QPaintEvent *event)
     painter.setRenderHint(QPainter::TextAntialiasing, true);
 
     const QRect r = rect();
+    const QPoint rc = r.center();
 
-    QLinearGradient bg(0, 0, 0, r.height());
-    bg.setColorAt(0.0, m_gradTop);
-    bg.setColorAt(1.0, m_gradBottom);
+    QLinearGradient bg(0, 0, r.width(), 0);
+    const QColor leftTone = m_gradTop.darker(115);
+    const QColor rightTone = m_gradBottom.lighter(130);
+    bg.setColorAt(0.0, leftTone);
+    bg.setColorAt(0.55, m_gradTop);
+    bg.setColorAt(1.0, rightTone);
     painter.fillRect(r, bg);
+
+    painter.setPen(Qt::NoPen);
+    const int maxRipple = qMax(r.width(), r.height());
+    for (int i = 1; i <= 8; ++i) {
+        const int radius = 80 + i * (maxRipple / 14);
+        const int a = qMax(8, 55 - i * 6);
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor(255, 255, 255, a), i <= 3 ? 2 : 1));
+        painter.drawEllipse(rc, radius, radius);
+    }
+    painter.setPen(Qt::NoPen);
+
+    if (!m_watermarkText.isEmpty()) {
+        QFont wf = painter.font();
+        wf.setPixelSize(qMin(260, qMax(120, r.height() / 3)));
+        wf.setBold(true);
+        painter.setFont(wf);
+        painter.setPen(QColor(255, 255, 255, 28));
+        painter.drawText(r, Qt::AlignCenter, m_watermarkText);
+    }
 
     if (m_overlayAlpha > 0.0f) {
         const int a = static_cast<int>(qBound(0.0f, m_overlayAlpha, 1.0f) * 255.0f);
-        painter.fillRect(r, QColor(255, 200, 100, a));
+        painter.fillRect(r, QColor(255, 210, 150, a));
     }
 
-    const int decorR = qMin(220, r.height() / 3);
-    const int cx = decorR + 40;
-    const int cy = r.center().y();
-    QRadialGradient vinyl(cx, cy, static_cast<qreal>(decorR));
-    vinyl.setColorAt(0.0, QColor(30, 30, 35, 140));
-    vinyl.setColorAt(0.55, QColor(20, 20, 28, 180));
-    vinyl.setColorAt(1.0, QColor(10, 10, 15, 0));
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(vinyl);
-    painter.drawEllipse(QPoint(cx, cy), decorR, decorR);
-    painter.setPen(QPen(QColor(255, 255, 255, 50), 3));
-    painter.setBrush(Qt::NoBrush);
-    painter.drawEllipse(QPoint(cx, cy), decorR - 18, decorR - 18);
+    if (m_flashAlpha > 0.0f) {
+        const float fa = qBound(0.0f, m_flashAlpha, 1.0f);
+        const int baseA = static_cast<int>(fa * 220.0f);
+        const QPointF flashOrigin(static_cast<qreal>(r.center().x()), static_cast<qreal>(r.height() * 0.08));
+        const qreal flashR = static_cast<qreal>(qMax(r.width(), r.height())) * 0.95;
+        QRadialGradient flash(flashOrigin, flashR);
+        flash.setColorAt(0.0, QColor(255, 255, 255, baseA));
+        flash.setColorAt(0.25, QColor(255, 248, 220, static_cast<int>(baseA * 0.45f)));
+        flash.setColorAt(0.55, QColor(255, 200, 120, static_cast<int>(baseA * 0.18f)));
+        flash.setColorAt(1.0, QColor(255, 255, 255, 0));
+        painter.setCompositionMode(QPainter::CompositionMode_Plus);
+        painter.fillRect(r, flash);
+        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+    }
+
+    const int wText = r.width() - 100;
+    const int midY = r.center().y();
+    const QRect line1Rect(rc.x() - wText / 2, midY - 88, wText, 64);
+    const QRect line2Rect(rc.x() - wText / 2, midY + 20, wText, 64);
 
     QFont f = painter.font();
     f.setPixelSize(kLyricFontPx);
@@ -321,17 +385,18 @@ void BeatLyricWidget::paintEvent(QPaintEvent *event)
 
     const int textA = static_cast<int>(qBound(0.0f, m_lyricAlpha, 1.0f) * 255.0f);
     const QColor textColor(255, 255, 255, textA);
+    const QColor shadowColor(0, 0, 0, qMin(200, textA));
 
-    const int centerX = r.center().x() + decorR / 4;
-    const int wText = r.width() - decorR - 80;
-    const int midY = r.center().y();
-    const QRect line1Rect(centerX - wText / 2, midY - 130, wText, 70);
-    const QRect line2Rect(centerX - wText / 2, midY + 60, wText, 70);
+    auto drawLyricLine = [&](const QRect &rect, const QString &txt) {
+        if (txt.isEmpty()) {
+            return;
+        }
+        painter.setPen(shadowColor);
+        painter.drawText(rect.translated(2, 2), Qt::AlignHCenter | Qt::AlignVCenter, txt);
+        painter.setPen(textColor);
+        painter.drawText(rect, Qt::AlignHCenter | Qt::AlignVCenter, txt);
+    };
 
-    painter.setPen(textColor);
-    painter.drawText(line1Rect, Qt::AlignHCenter | Qt::AlignVCenter, m_line1);
-
-    if (!m_line2.isEmpty()) {
-        painter.drawText(line2Rect, Qt::AlignHCenter | Qt::AlignVCenter, m_line2);
-    }
+    drawLyricLine(line1Rect, m_line1);
+    drawLyricLine(line2Rect, m_line2);
 }
