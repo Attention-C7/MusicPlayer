@@ -1,7 +1,6 @@
 #include "playwidget.h"
 #include "ui_playwidget.h"
 
-#include "beatdetector.h"
 #include "beatlyricwidget.h"
 #include "lyriclinerow.h"
 #include "volumesafety.h"
@@ -28,8 +27,6 @@
 #include <QToolTip>
 #include <QVBoxLayout>
 
-#include <QSequentialAnimationGroup>
-
 PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::PlayWidget)
@@ -41,10 +38,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_artistMap()
     , m_albumMap()
     , m_beatEffect(true)
-    , m_overlayAlpha(0.0f)
-    , m_beatFlashRise(new QPropertyAnimation(this, "overlayAlpha", this))
-    , m_beatFlashFall(new QPropertyAnimation(this, "overlayAlpha", this))
-    , m_beatFlashGroup(new QSequentialAnimationGroup(this))
     , m_isDragging(false)
     , m_longPressTimer(new QTimer(this))
     , m_pressDirection(0)
@@ -67,9 +60,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
-
-    m_beatFlashGroup->addAnimation(m_beatFlashRise);
-    m_beatFlashGroup->addAnimation(m_beatFlashFall);
 
     ui->slider_progress->setRange(0, 0);
     ui->lbl_currentTime->setText(QStringLiteral("00:00"));
@@ -306,13 +296,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     onSessionPlaybackActiveChanged(m_controller->sessionPlaybackActive());
     onControllerPlaybackStateChanged(m_controller->playbackState());
 
-    connect(
-        m_controller,
-        &PlayerController::beatDetected,
-        this,
-        &PlayWidget::onBeat,
-        Qt::QueuedConnection);
-
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
     }
@@ -326,7 +309,6 @@ void PlayWidget::onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState st
         ui->turntableAlbum->setPlatterSpinning(true);
     } else {
         ui->turntableAlbum->setPlatterSpinning(false);
-        stopBeatEffect();
     }
 }
 
@@ -338,66 +320,10 @@ void PlayWidget::onSessionPlaybackActiveChanged(bool active)
     ui->turntableAlbum->setTonearmOnRecord(active);
 }
 
-void PlayWidget::stopBeatEffect()
-{
-    m_beatFlashGroup->stop();
-    m_overlayAlpha = 0.0f;
-    update();
-}
-
-void PlayWidget::applyBeatFlash(float intensity)
-{
-    const float i = qBound(0.0f, intensity, 1.0f);
-    const float peakAlpha = 0.15f + i * 0.3f;
-    const int durationMs = 150;
-
-    m_beatFlashGroup->stop();
-    const float startAlpha = overlayAlpha();
-
-    m_beatFlashRise->setDuration(durationMs);
-    m_beatFlashRise->setStartValue(startAlpha);
-    m_beatFlashRise->setEndValue(peakAlpha);
-
-    m_beatFlashFall->setDuration(durationMs);
-    m_beatFlashFall->setStartValue(peakAlpha);
-    m_beatFlashFall->setEndValue(0.0f);
-
-    m_beatFlashGroup->start();
-}
-
-void PlayWidget::onBeat(float intensity)
-{
-    if (!m_beatEffect) {
-        return;
-    }
-    /** 须与 BeatDetector 一致：辅拍为 kOnsetIntensity(0.3)，主拍为 1.0；阈值不得低于辅拍否则闪光永不触发。 */
-    if (intensity < BeatDetector::kOnsetIntensity) {
-        return;
-    }
-
-    applyBeatFlash(intensity);
-}
-
 void PlayWidget::setBeatEnabled(bool enabled)
 {
     m_beatEffect = enabled;
     updateBeatLyricButtonState();
-
-    if (!enabled) {
-        stopBeatEffect();
-        return;
-    }
-}
-
-float PlayWidget::overlayAlpha() const
-{
-    return m_overlayAlpha;
-}
-
-void PlayWidget::setOverlayAlpha(float alpha)
-{
-    m_overlayAlpha = qBound(0.0f, alpha, 1.0f);
-    update();
 }
 
 void PlayWidget::showToast(const QString &message, int displayMs)
@@ -413,7 +339,7 @@ void PlayWidget::updateBeatLyricButtonState()
     ui->btn_beat->setToolTipDuration(8000);
     if (canEnterBeatLyric) {
         ui->btn_beat->setToolTip(QStringLiteral(
-            "当前歌曲已匹配歌词，可进入节拍歌词全屏\n（随节拍闪烁背景、双行歌词）"));
+            "当前歌曲已匹配歌词，可进入节拍歌词全屏\n（全屏内随节拍亮度闪烁，双行歌词）"));
     } else {
         ui->btn_beat->setToolTip(QStringLiteral(
             "当前歌曲无歌词文件，无法进入节拍歌词全屏\n（若有同名 .lrc，重新扫描曲库后可匹配）"));
@@ -472,7 +398,6 @@ void PlayWidget::onBeatButtonClicked()
         return;
     }
 
-    stopBeatEffect();
     auto *w = new BeatLyricWidget(this);
     w->setBeatSource(m_controller);
     w->setLyricController(this);
@@ -896,9 +821,6 @@ void PlayWidget::paintEvent(QPaintEvent *event)
         painter.fillRect(rect(), QColor(10, 10, 20, 180));
     } else {
         painter.fillRect(rect(), QColor("#1a1a2e"));
-    }
-    if (m_beatEffect && m_overlayAlpha > 0.0f) {
-        painter.fillRect(rect(), QColor(255, 255, 255, static_cast<int>(m_overlayAlpha * 255.0f)));
     }
 
     QWidget::paintEvent(event);

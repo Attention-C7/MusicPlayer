@@ -4,9 +4,7 @@
 #include <QMap>  //映射，用于存储键值对：歌词时间戳→文本、艺人/专辑索引
 #include <QVector>  //与歌词行同序的时间戳列表，供点击跳转与进度查找
 #include <QPixmap>  //像素图，用于显示图像：封面与背景
-#include <QPropertyAnimation>  //属性动画，用于实现动画效果：节拍脉冲
-#include <QSequentialAnimationGroup>
-#include <QTimer>  //定时器，用于实现定时功能：节拍定时、长按检测等
+#include <QTimer>  //定时器，用于实现定时功能：长按检测等
 #include <QWidget>  //窗口组件，用于实现窗口管理、事件处理、绘制等功能
 
 class QEvent;
@@ -36,9 +34,7 @@ class LyricLineRow;
 
 class PlayWidget : public QWidget   //PlayWidget 继承自 QWidget，作为可布局、可绘制的整块播放界面。
 {
-    Q_OBJECT  //Q_OBJECT 宏声明 PlayWidget 类为 Qt 对象，自动生成信号和槽机制。本类有 signals 和 Q_PROPERTY，必须由 moc 处理。
-    Q_PROPERTY(float overlayAlpha READ overlayAlpha WRITE setOverlayAlpha)  //Q_PROPERTY 宏声明 overlayAlpha 属性，用于实现节拍脉冲动画。
-    //让普通变量变成 Qt 能动画的属性，没有它，自定义动画根本做不了！
+    Q_OBJECT  //Q_OBJECT 宏声明 PlayWidget 类为 Qt 对象，自动生成信号和槽机制。本类有 signals，必须由 moc 处理。
 public:
     //构造：必须传入 PlayerController *（谁播放、谁发 songChanged/positionChanged 由它负责）；parent 交给 QWidget。
     explicit PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent = nullptr);
@@ -66,10 +62,9 @@ private slots:
     void onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState state);
     void onSessionPlaybackActiveChanged(bool active);
     void onBeatButtonClicked();
-    void onBeat(float intensity);
 
 private:
-    void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
+    void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面等（节拍闪光仅在 BeatLyricWidget 全屏）。
     QString formatTime(qint64 ms) const;   //时间格式化：ms 转 mm:ss。与项目「时长用 qint64 毫秒」一致。
     void setPlayModeIcon(PlayMode mode);   //播放模式图标切换：根据 songinfo.h 里的 PlayMode 更新循环模式按钮图标。
     void updateLrcDisplay(qint64 position);   //歌词行滚动：传入当前播放时间，更新 m_lrcRows 中对应行的高亮。
@@ -77,18 +72,13 @@ private:
     void clearLrcLabels();
     void updateBackground(const QPixmap &pixmap);  //背景图模糊处理：传入封面 QPixmap，生成模糊背景图，供绘制使用。
     void updateIndexLabel();  //索引标签更新：根据播放状态（playing/paused）更新索引标签文本。
-    void stopBeatEffect();  //节拍关：停止叠层闪烁动画并清零叠层。
-    void setBeatEnabled(bool enabled);  //节拍效果开关：根据 enabled 更新按钮样式，并决定是否响应 beatDetected 叠层闪烁。
-    float overlayAlpha() const;  //获取 overlayAlpha 属性值。与 Q_PROPERTY 配套的 READ/WRITE，供动画和绘制读取。
-    void setOverlayAlpha(float alpha);  //设置 overlayAlpha 属性值，并触发更新。
+    void setBeatEnabled(bool enabled);  //节奏按钮高亮风格开关（主界面不叠节拍闪光；闪光仅在全屏节奏界面）。
     void setupVolumePopup();  //音量浮层：垂直滑条 + 百分比 + 静音，与 PlayerController 同步
     void repositionVolumePopup();  //锚定在音量按钮上方
     void refreshVolumeButtonIcon();  //根据音量/静音刷新工具栏喇叭图标
     void showToast(const QString &message, int displayMs = 2500);  //短时提示（无歌词等）
     /** 节拍按钮：根据是否有歌词更新提示文案、高亮（可进入节拍歌词全屏时暖色描边）。 */
     void updateBeatLyricButtonState();
-
-    void applyBeatFlash(float intensity);
 
     void resizeEvent(QResizeEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -105,12 +95,7 @@ private:
     QList<SongInfo> m_allSongs;  //与 setSearchContext 参数对应的缓存，供语音部件检索。
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;
-    bool m_beatEffect;  //主界面节拍叠层开关；默认开，强拍（intensity≥0.6）时闪烁。
-    float m_overlayAlpha;  //overlayAlpha 属性值，用于动画和绘制。与 Q_PROPERTY 绑定的叠层透明度存储。
-    /** 节拍叠层：先 0→峰值再峰值→0，与 BeatLyricWidget 时长/峰值公式一致。 */
-    QSequentialAnimationGroup *m_beatFlashGroup = nullptr;
-    QPropertyAnimation *m_beatFlashRise = nullptr;
-    QPropertyAnimation *m_beatFlashFall = nullptr;
+    bool m_beatEffect;  //节奏按钮样式；与全屏 BeatLyricWidget 节拍闪光无关。
     QPixmap m_lastAlbumCover;
     bool m_isDragging;  //拖拽状态，决定是否启动长按检测。
     QTimer *m_longPressTimer;  //长按定时器，每 500ms 调用一次 onLongPress()。
