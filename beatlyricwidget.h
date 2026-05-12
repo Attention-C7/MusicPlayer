@@ -13,13 +13,16 @@ class QPixmap;
 class QPropertyAnimation;
 class QPushButton;
 class QResizeEvent;
+class QSequentialAnimationGroup;
 class QShowEvent;
+class QTimer;
+class QHideEvent;
 
 class BeatDetector;
 class PlayWidget;
 
 /**
- * 全屏节拍 + 歌词：节拍叠层与 PlayWidget 一致（白幕 alpha 0.45→0 / 150ms），
+ * 全屏节拍 + 歌词：白幕叠层与 PlayWidget 同公式（0→峰值→0，峰值/时长随强度）；
  * 另含背景波纹、水印字、歌词阴影等氛围绘制。
  */
 class BeatLyricWidget : public QWidget
@@ -40,12 +43,14 @@ public:
     void setLyricController(PlayWidget *lyricSource);
 
 public slots:
-    void onBeat();
+    void onBeat(float intensity);
     void onLyricLineChanged(int lineIndex, const QString &text);
     void closeWidget();
 
 private slots:
     void onCloseButtonClicked();
+    void onBpmUpdated(float bpm);
+    void onBreathTimeout();
 
 signals:
     /** 用户按 Esc、点右上角关闭键后发出；可与 deleteLater 组合释放本窗口。 */
@@ -57,6 +62,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
 private:
     float lyricAlpha() const;
@@ -66,12 +72,20 @@ private:
 
     void updateWarmGradientFromCover(const QPixmap &cover);
 
+    void applyBeatFlash(float intensity);
+    void scheduleBreathAfterSilence();
+
     QString m_line1;
     QString m_line2;
     float m_lyricAlpha = 0.0f;
     float m_overlayAlpha = 0.0f;
     QPropertyAnimation *m_lyricAnim = nullptr;
-    QPropertyAnimation *m_beatAnim = nullptr;
+    QSequentialAnimationGroup *m_beatFlashGroup = nullptr;
+    QPropertyAnimation *m_beatFlashRise = nullptr;
+    QPropertyAnimation *m_beatFlashFall = nullptr;
+    QTimer *m_breathTimer = nullptr;
+    float m_currentBpm = 120.0f;
+    bool m_inBreathTimeout = false;
     int m_currentIndex = 0;
 
     QColor m_gradTop;
@@ -79,6 +93,7 @@ private:
     QString m_watermarkText;
 
     QMetaObject::Connection m_beatConn;
+    QMetaObject::Connection m_bpmConn;
     QMetaObject::Connection m_lyricConn;
 
     QPushButton *m_closeButton = nullptr;

@@ -5,6 +5,7 @@
 #include <QVector>  //与歌词行同序的时间戳列表，供点击跳转与进度查找
 #include <QPixmap>  //像素图，用于显示图像：封面与背景
 #include <QPropertyAnimation>  //属性动画，用于实现动画效果：节拍脉冲
+#include <QSequentialAnimationGroup>
 #include <QTimer>  //定时器，用于实现定时功能：节拍定时、长按检测等
 #include <QWidget>  //窗口组件，用于实现窗口管理、事件处理、绘制等功能
 
@@ -66,6 +67,10 @@ private slots:
     void onSessionPlaybackActiveChanged(bool active);
     void onBeatButtonClicked();
     void onBeatLyricFullscreenClosed();
+    void onBeatSensitivityIndexChanged(int index);
+    void onBeat(float intensity);
+    void onBpmUpdated(float bpm);
+    void onBreathTimeout();
 
 private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
@@ -76,9 +81,8 @@ private:
     void clearLrcLabels();
     void updateBackground(const QPixmap &pixmap);  //背景图模糊处理：传入封面 QPixmap，生成模糊背景图，供绘制使用。
     void updateIndexLabel();  //索引标签更新：根据播放状态（playing/paused）更新索引标签文本。
-    void startBeatEffect();  //节拍开：设定时器 2s 兜底并启动；真实节拍主要来自 BeatDetector::beatDetected→onBeat。
-    void stopBeatEffect();  //节拍关：定时器设回 2s 间隔后 stop，清 overlay，避免静音期乱闪。
-    void onBeat();  //节拍脉冲：BeatDetector::beatDetected 与定时器兜底（2s）共用；更新 overlayAlpha 动画。
+    void startBeatEffect();  //节拍开：启动 BPM 呼吸兜底定时器；真实节拍来自 BeatDetector::beatDetected。
+    void stopBeatEffect();  //节拍关：停止呼吸定时器与叠层动画。
     void setBeatEnabled(bool enabled);  //节拍效果开关：根据 enabled 更新按钮样式，并决定是否启动节拍定时器。
     float overlayAlpha() const;  //获取 overlayAlpha 属性值。与 Q_PROPERTY 配套的 READ/WRITE，供动画和绘制读取。
     void setOverlayAlpha(float alpha);  //设置 overlayAlpha 属性值，并触发更新。
@@ -88,6 +92,9 @@ private:
     void showToast(const QString &message, int displayMs = 2500);  //短时提示（无歌词等）
     /** 节拍按钮：根据是否有歌词更新提示文案、高亮（可进入节拍歌词全屏时暖色描边）。 */
     void updateBeatLyricButtonState();
+
+    void applyBeatFlash(float intensity);
+    void scheduleBreathAfterSilence();
 
     void resizeEvent(QResizeEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -104,10 +111,16 @@ private:
     QList<SongInfo> m_allSongs;  //与 setSearchContext 参数对应的缓存，供语音部件检索。
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;
-    QTimer *m_beatTimer;    //2s 周期兜底，无 beatDetected 时仍偶发脉冲；与 BeatDetector 信号互补。
+    /** 无检测输出时的弱呼吸：单次触发，间隔随 m_currentBpm。 */
+    QTimer *m_breathTimer = nullptr;
     bool m_beatEffect;  //节拍效果开关，决定是否启动节拍定时器。
+    float m_currentBpm = 120.0f;
+    bool m_inBreathTimeout = false;
     float m_overlayAlpha;  //overlayAlpha 属性值，用于动画和绘制。与 Q_PROPERTY 绑定的叠层透明度存储。
-    QPropertyAnimation *m_beatAnim;  //节拍动画，用于实现 overlayAlpha 动画效果。
+    /** 节拍叠层：先 0→峰值再峰值→0，与 BeatLyricWidget 时长/峰值公式一致。 */
+    QSequentialAnimationGroup *m_beatFlashGroup = nullptr;
+    QPropertyAnimation *m_beatFlashRise = nullptr;
+    QPropertyAnimation *m_beatFlashFall = nullptr;
     QPixmap m_lastAlbumCover;
     bool m_isDragging;  //拖拽状态，决定是否启动长按检测。
     QTimer *m_longPressTimer;  //长按定时器，每 500ms 调用一次 onLongPress()。

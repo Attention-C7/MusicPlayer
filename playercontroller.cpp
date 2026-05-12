@@ -65,7 +65,7 @@ PlayerController::PlayerController(QObject *parent)
 #endif
 }
 
-/** UI 等可 connect(controller->beatDetector(), &BeatDetector::beatDetected, …)。 */
+/** UI 可 connect beatDetector 的 beatDetected(float)、bpmUpdated(float)；跨线程建议 QueuedConnection。 */
 BeatDetector *PlayerController::beatDetector() const
 {
     return m_beatDetector;

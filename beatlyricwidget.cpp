@@ -15,14 +15,17 @@
 #include <QMetaObject>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QSequentialAnimationGroup>
 #include <QShowEvent>
+#include <QTimer>
+#include <QHideEvent>
+
+#include <algorithm>
+#include <cmath>
 
 namespace {
 
 constexpr int kLyricFontPx = 48;
-/** 与 PlayWidget::onBeat 一致：整屏白叠层峰值与时长（毫秒）。 */
-constexpr int kBeatOverlayMs = 150;
-constexpr float kBeatOverlayPeak = 0.45f;
 constexpr int kLyricFadeMs = 600;
 constexpr int kCloseBtnSize = 48;
 constexpr int kCloseBtnMargin = 16;
@@ -50,7 +53,10 @@ QColor warmShift(const QColor &sample)
 BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     : QWidget(parent)
     , m_lyricAnim(new QPropertyAnimation(this, "lyricAlpha", this))
-    , m_beatAnim(new QPropertyAnimation(this, "overlayAlpha", this))
+    , m_beatFlashRise(new QPropertyAnimation(this, "overlayAlpha", this))
+    , m_beatFlashFall(new QPropertyAnimation(this, "overlayAlpha", this))
+    , m_beatFlashGroup(new QSequentialAnimationGroup(this))
+    , m_breathTimer(new QTimer(this))
     , m_gradTop(80, 40, 30)
     , m_gradBottom(40, 20, 50)
 {
@@ -64,9 +70,11 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     m_lyricAnim->setStartValue(0.0f);
     m_lyricAnim->setEndValue(1.0f);
 
-    m_beatAnim->setDuration(kBeatOverlayMs);
-    m_beatAnim->setStartValue(kBeatOverlayPeak);
-    m_beatAnim->setEndValue(0.0f);
+    m_beatFlashGroup->addAnimation(m_beatFlashRise);
+    m_beatFlashGroup->addAnimation(m_beatFlashFall);
+
+    m_breathTimer->setSingleShot(true);
+    connect(m_breathTimer, &QTimer::timeout, this, &BeatLyricWidget::onBreathTimeout);
 
     m_closeButton = new QPushButton(QStringLiteral("×"), this);
     m_closeButton->setObjectName(QStringLiteral("beatLyricClose"));
@@ -97,13 +105,16 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
 BeatLyricWidget::~BeatLyricWidget()
 {
     QObject::disconnect(m_beatConn);
+    QObject::disconnect(m_bpmConn);
     QObject::disconnect(m_lyricConn);
 }
 
 void BeatLyricWidget::setAudioController(BeatDetector *detector)
 {
     QObject::disconnect(m_beatConn);
+    QObject::disconnect(m_bpmConn);
     m_beatConn = QMetaObject::Connection();
+    m_bpmConn = QMetaObject::Connection();
     if (detector == nullptr) {
         return;
     }
@@ -112,6 +123,12 @@ void BeatLyricWidget::setAudioController(BeatDetector *detector)
         &BeatDetector::beatDetected,
         this,
         &BeatLyricWidget::onBeat,
+        Qt::QueuedConnection);
+    m_bpmConn = connect(
+        detector,
+        &BeatDetector::bpmUpdated,
+        this,
+        &BeatLyricWidget::onBpmUpdated,
         Qt::QueuedConnection);
 }
 
@@ -198,17 +215,67 @@ void BeatLyricWidget::updateWarmGradientFromCover(const QPixmap &cover)
     m_gradBottom = QColor(qMax(25, w.red() - 45), qMax(15, w.green() - 35), qMin(120, w.blue() + 40));
 }
 
-void BeatLyricWidget::onBeat()
+void BeatLyricWidget::applyBeatFlash(float intensity)
 {
-    if (m_beatAnim == nullptr) {
+    const float i = qBound(0.0f, intensity, 1.0f);
+    float peakAlpha = 0.45f * i;
+    peakAlpha = std::max(peakAlpha, 0.05f);
+    int durationMs = static_cast<int>(150.0f * (0.5f + 0.5f * i));
+    durationMs = std::clamp(durationMs, 70, 200);
+
+    m_beatFlashGroup->stop();
+    setOverlayAlpha(0.0f);
+
+    m_beatFlashRise->setDuration(durationMs);
+    m_beatFlashRise->setStartValue(0.0f);
+    m_beatFlashRise->setEndValue(peakAlpha);
+
+    m_beatFlashFall->setDuration(durationMs);
+    m_beatFlashFall->setStartValue(peakAlpha);
+    m_beatFlashFall->setEndValue(0.0f);
+
+    m_beatFlashGroup->start();
+}
+
+void BeatLyricWidget::scheduleBreathAfterSilence()
+{
+    if (!isVisible()) {
         return;
     }
-    m_beatAnim->stop();
-    setOverlayAlpha(kBeatOverlayPeak);
-    m_beatAnim->setStartValue(kBeatOverlayPeak);
-    m_beatAnim->setEndValue(0.0f);
-    m_beatAnim->setDuration(kBeatOverlayMs);
-    m_beatAnim->start();
+    const float bpm = qMax(40.0f, m_currentBpm);
+    const int ms = std::max(2000, static_cast<int>(60000.0f / bpm * 1.8f + 0.5f));
+    m_breathTimer->start(ms);
+}
+
+void BeatLyricWidget::onBeat(float intensity)
+{
+    if (!isVisible()) {
+        return;
+    }
+    applyBeatFlash(intensity);
+    if (!m_inBreathTimeout) {
+        scheduleBreathAfterSilence();
+    }
+}
+
+void BeatLyricWidget::onBpmUpdated(float bpm)
+{
+    if (std::isfinite(bpm) && bpm > 0.0f) {
+        m_currentBpm = std::clamp(bpm, 40.0f, 220.0f);
+    }
+}
+
+void BeatLyricWidget::onBreathTimeout()
+{
+    if (!isVisible()) {
+        return;
+    }
+    m_inBreathTimeout = true;
+    applyBeatFlash(0.08f);
+    m_inBreathTimeout = false;
+    const float bpm = qMax(40.0f, m_currentBpm);
+    const int nextMs = qMax(50, static_cast<int>(60000.0f / bpm + 0.5f));
+    m_breathTimer->start(nextMs);
 }
 
 void BeatLyricWidget::onLyricLineChanged(int lineIndex, const QString &text)
@@ -263,6 +330,14 @@ void BeatLyricWidget::showEvent(QShowEvent *event)
         setGeometry(screen()->availableGeometry());
     }
     layoutCloseButtonTopRight(this, m_closeButton);
+    scheduleBreathAfterSilence();
+}
+
+void BeatLyricWidget::hideEvent(QHideEvent *event)
+{
+    m_breathTimer->stop();
+    m_beatFlashGroup->stop();
+    QWidget::hideEvent(event);
 }
 
 void BeatLyricWidget::resizeEvent(QResizeEvent *event)
