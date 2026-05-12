@@ -3,124 +3,137 @@
 #include <QAudioBuffer>
 #include <QAudioFormat>
 #include <QDateTime>
-#include <QDebug> // 能量行日志；调参稳定后可删或改条件编译
+#include <QVector>
 
-#include <algorithm>
 #include <cmath>
 
 namespace {
 
-/**
- * 将本缓冲区内所有采样转为等效 float（Float 原样；Int16 /32768），
- * 再算整段 RMS = sqrt(mean(sample^2))。不支持格式返回 0。
- */
-float computeFrameRmsAsFloat(const QAudioBuffer &buffer)
+/** 将本缓冲区内交错标量采样解码为 float（Float 原样；Int16 /32768）。失败返回 false。 */
+bool decodeInterleavedFloats(const QAudioBuffer &buffer, QVector<float> *out)
 {
+    out->clear();
     if (!buffer.isValid()) {
-        return 0.0f;
+        return false;
     }
 
     const QAudioFormat format = buffer.format();
     const int channelCount = format.channelCount();
     const int frameCount = buffer.frameCount();
     if (channelCount <= 0 || frameCount <= 0) {
-        return 0.0f;
+        return false;
     }
 
-    // 交错 PCM：总标量采样数 = 帧数 × 声道数
     const int sampleCount = frameCount * channelCount;
     if (sampleCount <= 0) {
-        return 0.0f;
+        return false;
     }
 
-    double sumSq = 0.0;
+    out->reserve(sampleCount);
 
 #if QT_VERSION_MAJOR >= 6
-    // Qt 6.11+：仅模板 constData<T>() 为公开 API；勿调用无模板 constData()（已 private）。
     switch (format.sampleFormat()) {
     case QAudioFormat::Float: {
         const float *data = buffer.constData<float>();
         if (data == nullptr) {
-            return 0.0f;
+            return false;
         }
         for (int i = 0; i < sampleCount; ++i) {
-            const float s = data[i];
-            sumSq += static_cast<double>(s) * static_cast<double>(s);
+            out->append(data[i]);
         }
-        break;
+        return true;
     }
     case QAudioFormat::Int16: {
         const qint16 *data = buffer.constData<qint16>();
         if (data == nullptr) {
-            return 0.0f;
+            return false;
         }
         constexpr float kInv = 1.0f / 32768.0f;
         for (int i = 0; i < sampleCount; ++i) {
-            const float s = static_cast<float>(data[i]) * kInv;
-            sumSq += static_cast<double>(s) * static_cast<double>(s);
+            out->append(static_cast<float>(data[i]) * kInv);
         }
-        break;
+        return true;
     }
     default:
-        return 0.0f;
+        return false;
     }
 #else
     const int bytesPerFrame = format.bytesPerFrame();
     if (bytesPerFrame <= 0) {
-        return 0.0f;
+        return false;
     }
     const char *bytes = reinterpret_cast<const char *>(buffer.constData());
     if (bytes == nullptr) {
-        return 0.0f;
+        return false;
     }
 
     switch (format.sampleType()) {
     case QAudioFormat::Float: {
         if (format.sampleSize() / 8 != static_cast<int>(sizeof(float))) {
-            return 0.0f;
+            return false;
         }
         for (int f = 0; f < frameCount; ++f) {
             const float *frame = reinterpret_cast<const float *>(bytes + f * bytesPerFrame);
             for (int ch = 0; ch < channelCount; ++ch) {
-                const float s = frame[ch];
-                sumSq += static_cast<double>(s) * static_cast<double>(s);
+                out->append(frame[ch]);
             }
         }
-        break;
+        return true;
     }
     case QAudioFormat::SignedInt: {
         if (format.sampleSize() != 16) {
-            return 0.0f;
+            return false;
         }
         constexpr float kInv = 1.0f / 32768.0f;
         for (int f = 0; f < frameCount; ++f) {
             const qint16 *frame = reinterpret_cast<const qint16 *>(bytes + f * bytesPerFrame);
             for (int ch = 0; ch < channelCount; ++ch) {
-                const float s = static_cast<float>(frame[ch]) * kInv;
-                sumSq += static_cast<double>(s) * static_cast<double>(s);
+                out->append(static_cast<float>(frame[ch]) * kInv);
             }
         }
-        break;
+        return true;
     }
     default:
-        return 0.0f;
+        return false;
     }
 #endif
+}
 
-    const double meanSq = sumSq / static_cast<double>(sampleCount);
-    if (meanSq <= 0.0) {
-        return 0.0f;
+/**
+ * 每 DOWNSAMPLE_STRIDE 个采样取算术均值得到一个低频采样；对整帧低频序列求 RMS。
+ * 尾部不足一组的标量丢弃。组数为 0 时返回 false。
+ */
+bool computeDownsampledLowRms(const QVector<float> &samples, int stride, float *outLowRms)
+{
+    if (stride <= 0 || outLowRms == nullptr) {
+        return false;
     }
-    return static_cast<float>(std::sqrt(meanSq));
+    const int n = samples.size();
+    const int groups = n / stride;
+    if (groups <= 0) {
+        return false;
+    }
+
+    double sumSq = 0.0;
+    for (int g = 0; g < groups; ++g) {
+        double mean = 0.0;
+        const int base = g * stride;
+        for (int k = 0; k < stride; ++k) {
+            mean += static_cast<double>(samples.at(base + k));
+        }
+        mean /= static_cast<double>(stride);
+        sumSq += mean * mean;
+    }
+
+    *outLowRms = static_cast<float>(std::sqrt(sumSq / static_cast<double>(groups)));
+    return true;
 }
 
 } // namespace
 
 BeatDetector::BeatDetector(QObject *parent)
     : QObject(parent)
-    , m_energyHistory()
 {
-    m_energyHistory.reserve(WINDOW);
 }
 
 void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
@@ -129,45 +142,27 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         return;
     }
 
-#if defined(MUSICPLAYER_BEATDETECTOR_TRACE) || defined(QT_DEBUG)
-    static int s_feedLogCount = 0;
-    ++s_feedLogCount;
-    if (s_feedLogCount <= 12 || (s_feedLogCount % 128) == 0) {
-        qDebug() << QStringLiteral("[BeatDetector] feedBuffer call#%1 frames=%2")
-                        .arg(s_feedLogCount)
-                        .arg(buffer.frameCount());
-    }
-#endif
-
-    // 1) 本帧 RMS（peak）
-    const float rms = computeFrameRmsAsFloat(buffer);
-    const float peak = rms;
-
-    // 2) 写入滑动窗
-    m_energyHistory.append(rms);
-    while (m_energyHistory.size() > WINDOW) {
-        m_energyHistory.removeFirst();
-    }
-
-    // 3) 冷启动：未满 WINDOW 帧不判定
-    if (m_energyHistory.size() < WINDOW) {
+    QVector<float> samples;
+    if (!decodeInterleavedFloats(buffer, &samples)) {
         return;
     }
 
-    // 4) baseline = 窗内最小 RMS：安静段低，强拍相对比值大（渐进音乐下比「对平均」更敏感）
-    const float baseline = *std::min_element(m_energyHistory.cbegin(), m_energyHistory.cend());
-
-    // 临时：观察 peak / baseline / 判定门限
-    static int s_energyLogCount = 0;
-    if (++s_energyLogCount <= 15 || (s_energyLogCount % 128) == 0) {
-        qDebug() << "[Beat] peak=" << peak << "baseline=" << baseline << "threshold=" << (baseline * THRESHOLD);
+    float lowRms = 0.0f;
+    if (!computeDownsampledLowRms(samples, DOWNSAMPLE_STRIDE, &lowRms)) {
+        return;
     }
 
-    // 5) peak 相对 baseline 突增 + 绝对能量门限 + 防抖
+    if (!m_hasPrevLowRms) {
+        m_prevLowRms = lowRms;
+        m_hasPrevLowRms = true;
+        return;
+    }
+
+    const float diff = lowRms - m_prevLowRms;
+    m_prevLowRms = lowRms;
+
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (peak > baseline * THRESHOLD
-        && peak > MIN_PEAK_RMS
-        && (now - m_lastBeatTime) > static_cast<qint64>(MIN_INTERVAL)) {
+    if (diff > DIFF_THRESHOLD && (now - m_lastBeatTime) > static_cast<qint64>(MIN_INTERVAL_MS)) {
         m_lastBeatTime = now;
         emit beatDetected();
     }
