@@ -56,6 +56,40 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         }
         return true;
     }
+    case QAudioFormat::Int32: {
+        const qint32 *const data = reinterpret_cast<const qint32 *>(buffer.constData<qint32>());
+        if (data == nullptr) {
+            return false;
+        }
+        constexpr float kInv = 1.0f / 2147483648.0f;
+        for (int f = 0; f < frameCount; ++f) {
+            const qint32 *const frame = data + f * channelCount;
+            if (channelCount >= 2) {
+                out->append(0.5f * (static_cast<float>(frame[0]) + static_cast<float>(frame[1])) * kInv);
+            } else {
+                out->append(static_cast<float>(frame[0]) * kInv);
+            }
+        }
+        return true;
+    }
+    case QAudioFormat::UInt8: {
+        const quint8 *const data = reinterpret_cast<const quint8 *>(buffer.constData<quint8>());
+        if (data == nullptr) {
+            return false;
+        }
+        constexpr float kInv = 1.0f / 128.0f;
+        for (int f = 0; f < frameCount; ++f) {
+            const quint8 *const frame = data + f * channelCount;
+            if (channelCount >= 2) {
+                out->append(
+                    0.5f * ((static_cast<float>(frame[0]) - 128.0f) + (static_cast<float>(frame[1]) - 128.0f))
+                            * kInv);
+            } else {
+                out->append((static_cast<float>(frame[0]) - 128.0f) * kInv);
+            }
+        }
+        return true;
+    }
     default:
         return false;
     }

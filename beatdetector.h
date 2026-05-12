@@ -24,7 +24,7 @@ public:
     static constexpr float kTempoConfTrigger = 0.5f;
     static constexpr float kTempoIntensity = 1.0f;
     static constexpr float kOnsetIntensity = 0.3f;
-    /** UI 可忽略低于此强度的节拍（检测器仍会发出 kOnsetIntensity）。 */
+    /** 检测器侧「强主拍」语义：与 aubio_tempo 置信度比较；非 UI 闪光门限（UI 应接受 kOnsetIntensity 辅拍）。 */
     static constexpr float kMinBeatIntensity = 0.6f;
 
     explicit BeatDetector(QObject *parent = nullptr);

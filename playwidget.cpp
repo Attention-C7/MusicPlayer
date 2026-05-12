@@ -1,6 +1,7 @@
 #include "playwidget.h"
 #include "ui_playwidget.h"
 
+#include "beatdetector.h"
 #include "beatlyricwidget.h"
 #include "lyriclinerow.h"
 #include "volumesafety.h"
@@ -369,7 +370,8 @@ void PlayWidget::onBeat(float intensity)
     if (!m_beatEffect) {
         return;
     }
-    if (intensity < 0.6f) {
+    /** 须与 BeatDetector 一致：辅拍为 kOnsetIntensity(0.3)，主拍为 1.0；阈值不得低于辅拍否则闪光永不触发。 */
+    if (intensity < BeatDetector::kOnsetIntensity) {
         return;
     }
 
