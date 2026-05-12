@@ -3,6 +3,7 @@
 #include <QAudioBuffer>
 #include <QAudioFormat>
 #include <QDateTime>
+#include <QDebug> // 临时：[Beat] lowRms / diff / prevLowRms
 #include <QVector>
 
 #include <cmath>
@@ -158,12 +159,17 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         return;
     }
 
-    const float diff = lowRms - m_prevLowRms;
-    m_prevLowRms = lowRms;
+    float diff = lowRms - m_prevLowRms;
+
+    qDebug() << "[Beat] lowRms=" << lowRms
+             << "diff=" << diff
+             << "prevLowRms=" << m_prevLowRms;
 
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     if (diff > DIFF_THRESHOLD && (now - m_lastBeatTime) > static_cast<qint64>(MIN_INTERVAL_MS)) {
         m_lastBeatTime = now;
         emit beatDetected();
     }
+
+    m_prevLowRms = lowRms;
 }
