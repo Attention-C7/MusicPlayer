@@ -6,9 +6,7 @@
 #include "volumesafety.h"
 
 #include <algorithm>
-#include <cmath>
 
-#include <QComboBox>
 #include <QCoreApplication>
 #include <QEvent>
 #include <QFileInfo>
@@ -41,7 +39,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_allSongs()
     , m_artistMap()
     , m_albumMap()
-    , m_breathTimer(new QTimer(this))
     , m_beatEffect(false)
     , m_overlayAlpha(0.0f)
     , m_beatFlashRise(new QPropertyAnimation(this, "overlayAlpha", this))
@@ -69,9 +66,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
-
-    m_breathTimer->setSingleShot(true);
-    connect(m_breathTimer, &QTimer::timeout, this, &PlayWidget::onBreathTimeout);
 
     m_beatFlashGroup->addAnimation(m_beatFlashRise);
     m_beatFlashGroup->addAnimation(m_beatFlashFall);
@@ -244,21 +238,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     });
     connect(ui->btn_beat, &QPushButton::clicked, this, &PlayWidget::onBeatButtonClicked);
 
-    if (ui->combo_beatSensitivity != nullptr) {
-        ui->combo_beatSensitivity->clear();
-        ui->combo_beatSensitivity->addItem(QStringLiteral("节拍：标准"));
-        ui->combo_beatSensitivity->addItem(QStringLiteral("节拍：弱节奏增强"));
-        ui->combo_beatSensitivity->addItem(QStringLiteral("节拍：减误触"));
-        ui->combo_beatSensitivity->setCurrentIndex(0);
-        ui->combo_beatSensitivity->setToolTip(QStringLiteral(
-            "节拍检测灵敏度：标准均衡；弱节奏增强更易触发 onset/tempo；减误触提高门限减少过密闪烁"));
-        connect(
-            ui->combo_beatSensitivity,
-            QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this,
-            &PlayWidget::onBeatSensitivityIndexChanged);
-    }
-
     connect(ui->slider_progress, &QSlider::sliderPressed, this, [this]() {
         m_isDragging = true;
     });
@@ -326,21 +305,12 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     onSessionPlaybackActiveChanged(m_controller->sessionPlaybackActive());
     onControllerPlaybackStateChanged(m_controller->playbackState());
 
-    // 解码节拍 + BPM 呼吸兜底
-    if (m_controller->beatDetector() != nullptr) {
-        connect(
-            m_controller->beatDetector(),
-            &BeatDetector::beatDetected,
-            this,
-            &PlayWidget::onBeat,
-            Qt::QueuedConnection);
-        connect(
-            m_controller->beatDetector(),
-            &BeatDetector::bpmUpdated,
-            this,
-            &PlayWidget::onBpmUpdated,
-            Qt::QueuedConnection);
-    }
+    connect(
+        m_controller,
+        &PlayerController::beatDetected,
+        this,
+        &PlayWidget::onBeat,
+        Qt::QueuedConnection);
 
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
@@ -353,7 +323,6 @@ void PlayWidget::onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState st
 {
     if (state == QMediaPlayer::PlayingState) {
         ui->turntableAlbum->setPlatterSpinning(true);
-        startBeatEffect();
     } else {
         ui->turntableAlbum->setPlatterSpinning(false);
         stopBeatEffect();
@@ -368,17 +337,8 @@ void PlayWidget::onSessionPlaybackActiveChanged(bool active)
     ui->turntableAlbum->setTonearmOnRecord(active);
 }
 
-void PlayWidget::startBeatEffect()
-{
-    if (!m_beatEffect) {
-        return;
-    }
-    scheduleBreathAfterSilence();
-}
-
 void PlayWidget::stopBeatEffect()
 {
-    m_breathTimer->stop();
     m_beatFlashGroup->stop();
     m_overlayAlpha = 0.0f;
     update();
@@ -387,16 +347,14 @@ void PlayWidget::stopBeatEffect()
 void PlayWidget::applyBeatFlash(float intensity)
 {
     const float i = qBound(0.0f, intensity, 1.0f);
-    float peakAlpha = 0.45f * i;
-    peakAlpha = std::max(peakAlpha, 0.05f);
-    int durationMs = static_cast<int>(150.0f * (0.5f + 0.5f * i));
-    durationMs = std::clamp(durationMs, 70, 200);
+    const float peakAlpha = 0.15f + i * 0.3f;
+    const int durationMs = 150;
 
     m_beatFlashGroup->stop();
-    setOverlayAlpha(0.0f);
+    const float startAlpha = overlayAlpha();
 
     m_beatFlashRise->setDuration(durationMs);
-    m_beatFlashRise->setStartValue(0.0f);
+    m_beatFlashRise->setStartValue(startAlpha);
     m_beatFlashRise->setEndValue(peakAlpha);
 
     m_beatFlashFall->setDuration(durationMs);
@@ -406,46 +364,16 @@ void PlayWidget::applyBeatFlash(float intensity)
     m_beatFlashGroup->start();
 }
 
-void PlayWidget::scheduleBreathAfterSilence()
-{
-    if (!m_beatEffect) {
-        return;
-    }
-    const float bpm = qMax(40.0f, m_currentBpm);
-    const int ms = std::max(2000, static_cast<int>(60000.0f / bpm * 1.8f + 0.5f));
-    m_breathTimer->start(ms);
-}
-
 void PlayWidget::onBeat(float intensity)
 {
     if (!m_beatEffect) {
         return;
     }
-
-    applyBeatFlash(intensity);
-    if (!m_inBreathTimeout) {
-        scheduleBreathAfterSilence();
-    }
-}
-
-void PlayWidget::onBpmUpdated(float bpm)
-{
-    if (std::isfinite(bpm) && bpm > 0.0f) {
-        m_currentBpm = std::clamp(bpm, 40.0f, 220.0f);
-    }
-}
-
-void PlayWidget::onBreathTimeout()
-{
-    if (!m_beatEffect) {
+    if (intensity < 0.6f) {
         return;
     }
-    m_inBreathTimeout = true;
-    applyBeatFlash(0.08f);
-    m_inBreathTimeout = false;
-    const float bpm = qMax(40.0f, m_currentBpm);
-    const int nextMs = qMax(50, static_cast<int>(60000.0f / bpm + 0.5f));
-    m_breathTimer->start(nextMs);
+
+    applyBeatFlash(intensity);
 }
 
 void PlayWidget::setBeatEnabled(bool enabled)
@@ -456,10 +384,6 @@ void PlayWidget::setBeatEnabled(bool enabled)
     if (!enabled) {
         stopBeatEffect();
         return;
-    }
-
-    if (m_controller->playbackState() == QMediaPlayer::PlayingState) {
-        startBeatEffect();
     }
 }
 
@@ -548,7 +472,7 @@ void PlayWidget::onBeatButtonClicked()
 
     stopBeatEffect();
     auto *w = new BeatLyricWidget(this);
-    w->setAudioController(m_controller->beatDetector());
+    w->setBeatSource(m_controller);
     w->setLyricController(this);
     w->setBackgroundCover(m_lastAlbumCover);
     if (m_currentLrcIndex >= 0 && m_currentLrcIndex < m_lrcTimesMs.size()) {
@@ -558,29 +482,10 @@ void PlayWidget::onBeatButtonClicked()
         const QString t = m_lrcMap.value(m_lrcTimesMs.at(0));
         w->onLyricLineChanged(0, t);
     }
-    connect(w, &BeatLyricWidget::closed, this, &PlayWidget::onBeatLyricFullscreenClosed);
     connect(w, &BeatLyricWidget::closed, w, &QWidget::deleteLater);
     w->showFullScreen();
     w->raise();
     w->activateWindow();
-}
-
-void PlayWidget::onBeatLyricFullscreenClosed()
-{
-    if (m_beatEffect && m_controller->playbackState() == QMediaPlayer::PlayingState) {
-        startBeatEffect();
-    }
-}
-
-void PlayWidget::onBeatSensitivityIndexChanged(int index)
-{
-    if (m_controller->beatDetector() == nullptr) {
-        return;
-    }
-    if (index < 0 || index > static_cast<int>(BeatDetector::ReduceFalse)) {
-        return;
-    }
-    m_controller->beatDetector()->setSensitivity(static_cast<BeatDetector::Sensitivity>(index));
 }
 
 void PlayWidget::setSearchContext(

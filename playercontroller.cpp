@@ -53,6 +53,7 @@ PlayerController::PlayerController(QObject *parent)
 
     // 节拍检测链：放在构造末尾，避免与上方播放器初始化顺序纠缠；父对象均为 this，随控制器析构。
     m_beatDetector = new BeatDetector(this);
+    connect(m_beatDetector, &BeatDetector::beatDetected, this, &PlayerController::beatDetected);
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
     m_audioBufferOutput = new QAudioBufferOutput(this);
     m_player->setAudioBufferOutput(m_audioBufferOutput);
@@ -65,7 +66,7 @@ PlayerController::PlayerController(QObject *parent)
 #endif
 }
 
-/** UI 可 connect beatDetector 的 beatDetected(float)、bpmUpdated(float)；跨线程建议 QueuedConnection。 */
+/** 仍可直接访问检测器（如调节 onset 门限）；节拍 UI 请连接 PlayerController::beatDetected(float)。 */
 BeatDetector *PlayerController::beatDetector() const
 {
     return m_beatDetector;

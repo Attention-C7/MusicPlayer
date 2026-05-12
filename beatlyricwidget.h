@@ -15,15 +15,14 @@ class QPushButton;
 class QResizeEvent;
 class QSequentialAnimationGroup;
 class QShowEvent;
-class QTimer;
 class QHideEvent;
 
-class BeatDetector;
 class PlayWidget;
+class PlayerController;
 
 /**
- * 全屏节拍 + 歌词：白幕叠层与 PlayWidget 同公式（0→峰值→0，峰值/时长随强度）；
- * 另含背景波纹、水印字、歌词阴影等氛围绘制。
+ * 全屏节拍 + 歌词：白幕叠层与 PlayWidget 同公式（当前 alpha→峰值→0，峰值随 intensity，时长 150ms×2）；
+ * 仅 intensity ≥ 0.6 时闪烁；无拍时叠层保持静止。
  */
 class BeatLyricWidget : public QWidget
 {
@@ -37,8 +36,8 @@ public:
 
     /** 用封面主色更新暖色渐变背景；可多次调用。 */
     void setBackgroundCover(const QPixmap &cover);
-    /** 接入节拍信号 beatDetected → onBeat（QueuedConnection）。 */
-    void setAudioController(BeatDetector *detector);
+    /** 接入 PlayerController::beatDetected(float) → onBeat（QueuedConnection）。 */
+    void setBeatSource(PlayerController *controller);
     /** 接入 PlayWidget::lyricCurrentLineChanged → onLyricLineChanged。 */
     void setLyricController(PlayWidget *lyricSource);
 
@@ -49,8 +48,6 @@ public slots:
 
 private slots:
     void onCloseButtonClicked();
-    void onBpmUpdated(float bpm);
-    void onBreathTimeout();
 
 signals:
     /** 用户按 Esc、点右上角关闭键后发出；可与 deleteLater 组合释放本窗口。 */
@@ -73,7 +70,6 @@ private:
     void updateWarmGradientFromCover(const QPixmap &cover);
 
     void applyBeatFlash(float intensity);
-    void scheduleBreathAfterSilence();
 
     QString m_line1;
     QString m_line2;
@@ -83,9 +79,6 @@ private:
     QSequentialAnimationGroup *m_beatFlashGroup = nullptr;
     QPropertyAnimation *m_beatFlashRise = nullptr;
     QPropertyAnimation *m_beatFlashFall = nullptr;
-    QTimer *m_breathTimer = nullptr;
-    float m_currentBpm = 120.0f;
-    bool m_inBreathTimeout = false;
     int m_currentIndex = 0;
 
     QColor m_gradTop;
@@ -93,7 +86,6 @@ private:
     QString m_watermarkText;
 
     QMetaObject::Connection m_beatConn;
-    QMetaObject::Connection m_bpmConn;
     QMetaObject::Connection m_lyricConn;
 
     QPushButton *m_closeButton = nullptr;

@@ -66,11 +66,7 @@ private slots:
     void onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState state);
     void onSessionPlaybackActiveChanged(bool active);
     void onBeatButtonClicked();
-    void onBeatLyricFullscreenClosed();
-    void onBeatSensitivityIndexChanged(int index);
     void onBeat(float intensity);
-    void onBpmUpdated(float bpm);
-    void onBreathTimeout();
 
 private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
@@ -81,9 +77,8 @@ private:
     void clearLrcLabels();
     void updateBackground(const QPixmap &pixmap);  //背景图模糊处理：传入封面 QPixmap，生成模糊背景图，供绘制使用。
     void updateIndexLabel();  //索引标签更新：根据播放状态（playing/paused）更新索引标签文本。
-    void startBeatEffect();  //节拍开：启动 BPM 呼吸兜底定时器；真实节拍来自 BeatDetector::beatDetected。
-    void stopBeatEffect();  //节拍关：停止呼吸定时器与叠层动画。
-    void setBeatEnabled(bool enabled);  //节拍效果开关：根据 enabled 更新按钮样式，并决定是否启动节拍定时器。
+    void stopBeatEffect();  //节拍关：停止叠层闪烁动画并清零叠层。
+    void setBeatEnabled(bool enabled);  //节拍效果开关：根据 enabled 更新按钮样式，并决定是否响应 beatDetected 叠层闪烁。
     float overlayAlpha() const;  //获取 overlayAlpha 属性值。与 Q_PROPERTY 配套的 READ/WRITE，供动画和绘制读取。
     void setOverlayAlpha(float alpha);  //设置 overlayAlpha 属性值，并触发更新。
     void setupVolumePopup();  //音量浮层：垂直滑条 + 百分比 + 静音，与 PlayerController 同步
@@ -94,7 +89,6 @@ private:
     void updateBeatLyricButtonState();
 
     void applyBeatFlash(float intensity);
-    void scheduleBreathAfterSilence();
 
     void resizeEvent(QResizeEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -111,11 +105,7 @@ private:
     QList<SongInfo> m_allSongs;  //与 setSearchContext 参数对应的缓存，供语音部件检索。
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;
-    /** 无检测输出时的弱呼吸：单次触发，间隔随 m_currentBpm。 */
-    QTimer *m_breathTimer = nullptr;
-    bool m_beatEffect;  //节拍效果开关，决定是否启动节拍定时器。
-    float m_currentBpm = 120.0f;
-    bool m_inBreathTimeout = false;
+    bool m_beatEffect;  //节拍效果开关：强拍（intensity≥0.6）时主界面叠层闪烁。
     float m_overlayAlpha;  //overlayAlpha 属性值，用于动画和绘制。与 Q_PROPERTY 绑定的叠层透明度存储。
     /** 节拍叠层：先 0→峰值再峰值→0，与 BeatLyricWidget 时长/峰值公式一致。 */
     QSequentialAnimationGroup *m_beatFlashGroup = nullptr;

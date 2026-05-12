@@ -47,7 +47,7 @@ public:
     bool isMuted() const; //界面静音状态（与音量为 0 不同：语音设 0 不一定视为静音）
     void setMuted(bool muted); //静音：输出 0 并记忆上次音量；取消则恢复
     int volumePercentBeforeMute() const; //静音前记忆的还原音量（用于取消静音前听力提示）
-    /** 节拍检测器指针（构造末尾创建）；Qt 6.8+ 时另有 PCM 缓冲输出接入 feedBuffer。 */
+    /** 节拍检测器指针（构造末尾创建）；Qt 6.8+ 时另有 PCM 缓冲输出接入 feedBuffer。节拍 UI 请用 beatDetected(float) 信号。 */
     BeatDetector *beatDetector() const;
     /** 当前曲目最近一次 loadLrc 解析结果（无文件或解析失败为空映射）。 */
     const QMap<qint64, QString> &currentLyrics() const { return m_currentLyrics; }
@@ -78,6 +78,8 @@ signals:
     void lrcLoaded(QMap<qint64, QString> lyrics); //歌词加载完成；PlayWidget 更新歌词。歌词时间轴（毫秒 → 文本），PlayWidget 滚动歌词
     void playlistMetaUpdated(int index, SongInfo info); //播放列表元数据更新；ListWidget 里更新专辑、艺人等信息
     void volumePercentChanged(int percent); //音量或静音变化；触控滑条与语音指令共用一路径时同步 UI
+    /** 与 BeatDetector::beatDetected 一致；构造时已从内部检测器转发，UI 请连接本信号而非直连 BeatDetector。 */
+    void beatDetected(float intensity);
 
 private:
     static constexpr int SeekIntervalMs = 100;  //长按 seek 定时器间隔
