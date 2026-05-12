@@ -2,8 +2,9 @@
 
 #include <QAudioBuffer>
 #include <QAudioFormat>
+#include <QDateTime>
 
-#include <cstring>
+#include <cmath>
 
 namespace {
 
@@ -152,41 +153,11 @@ BeatDetector::~BeatDetector()
     releaseAnalysisEngine();
 }
 
-void BeatDetector::setOnsetThreshold(float value)
-{
-    if (value < 0.05f) {
-        value = 0.05f;
-    } else if (value > 0.95f) {
-        value = 0.95f;
-    }
-    m_onsetThreshold = value;
-    if (m_aubioOnset != nullptr) {
-        aubio_onset_set_threshold(m_aubioOnset, static_cast<smpl_t>(m_onsetThreshold));
-    }
-}
-
-void BeatDetector::setOnsetSilenceDb(float value)
-{
-    if (value > -20.0f) {
-        value = -20.0f;
-    } else if (value < -120.0f) {
-        value = -120.0f;
-    }
-    m_onsetSilenceDb = value;
-    if (m_aubioOnset != nullptr) {
-        aubio_onset_set_silence(m_aubioOnset, static_cast<smpl_t>(m_onsetSilenceDb));
-    }
-}
-
 void BeatDetector::releaseAnalysisEngine()
 {
     if (m_aubioTempo != nullptr) {
         del_aubio_tempo(m_aubioTempo);
         m_aubioTempo = nullptr;
-    }
-    if (m_aubioOnset != nullptr) {
-        del_aubio_onset(m_aubioOnset);
-        m_aubioOnset = nullptr;
     }
     if (m_inputBuf != nullptr) {
         del_fvec(m_inputBuf);
@@ -196,13 +167,11 @@ void BeatDetector::releaseAnalysisEngine()
         del_fvec(m_outputBuf);
         m_outputBuf = nullptr;
     }
-    if (m_onsetOut != nullptr) {
-        del_fvec(m_onsetOut);
-        m_onsetOut = nullptr;
-    }
     m_sampleRate = 0;
+    m_lowPassPrev = 0.0f;
+    m_lowPassAlpha = 0.0f;
     m_pending.clear();
-    m_hasLastBeat = false;
+    m_lastBeatWallMs = 0;
 }
 
 bool BeatDetector::ensureAnalysisEngine(int sampleRate)
@@ -211,30 +180,39 @@ bool BeatDetector::ensureAnalysisEngine(int sampleRate)
         return false;
     }
     const uint_t sr = static_cast<uint_t>(sampleRate);
-    if (m_aubioTempo != nullptr && m_inputBuf != nullptr && m_outputBuf != nullptr && m_onsetOut != nullptr
-        && m_sampleRate == sr) {
+    if (m_aubioTempo != nullptr && m_inputBuf != nullptr && m_outputBuf != nullptr && m_sampleRate == sr) {
         return true;
     }
 
     releaseAnalysisEngine();
 
+    /** 流行音乐底鼓主导：specflux 对频谱瞬变更敏感；silence/threshold 与 aubio_tempo 峰值拾取一致。 */
+    static constexpr float kPopTempoSilenceDb = -40.0f;
+    static constexpr float kPopTempoInternalThreshold = 0.3f;
+
     m_inputBuf = new_fvec(HOP_SIZE);
     m_outputBuf = new_fvec(2);
-    m_onsetOut = new_fvec(1);
-    m_aubioTempo = new_aubio_tempo("default", WIN_SIZE, HOP_SIZE, sr);
-    m_aubioOnset = new_aubio_onset("specflux", WIN_SIZE, HOP_SIZE, sr);
+    m_aubioTempo = new_aubio_tempo("specflux", WIN_SIZE, HOP_SIZE, sr);
 
-    if (m_inputBuf == nullptr || m_outputBuf == nullptr || m_onsetOut == nullptr || m_aubioTempo == nullptr
-        || m_aubioOnset == nullptr) {
+    if (m_inputBuf == nullptr || m_outputBuf == nullptr || m_aubioTempo == nullptr) {
         releaseAnalysisEngine();
         return false;
     }
 
-    aubio_onset_set_threshold(m_aubioOnset, static_cast<smpl_t>(m_onsetThreshold));
-    aubio_onset_set_silence(m_aubioOnset, static_cast<smpl_t>(m_onsetSilenceDb));
+    aubio_tempo_set_silence(m_aubioTempo, static_cast<smpl_t>(kPopTempoSilenceDb));
+    aubio_tempo_set_threshold(m_aubioTempo, static_cast<smpl_t>(kPopTempoInternalThreshold));
+
+    /** 一阶 IIR 低通近似截止 fc：alpha ≈ 2π*fc/fs（与 44100Hz 下 0.027 同量级）。 */
+    static constexpr float kKickBandFcHz = 200.0f;
+    static constexpr float kTwoPi = 6.28318530717958647692f;
+    float alpha = (kTwoPi * kKickBandFcHz) / static_cast<float>(sr);
+    if (alpha > 0.99f) {
+        alpha = 0.99f;
+    }
+    m_lowPassAlpha = alpha;
+    m_lowPassPrev = 0.0f;
 
     m_sampleRate = sr;
-    m_hasLastBeat = false;
     return true;
 }
 
@@ -258,32 +236,33 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
 
     const int hop = static_cast<int>(HOP_SIZE);
     while (m_pending.size() >= hop) {
-        std::memcpy(
-            m_inputBuf->data,
-            m_pending.constData(),
-            static_cast<size_t>(hop) * sizeof(smpl_t));
+        const float *const samples = m_pending.constData();
+        for (int i = 0; i < hop; ++i) {
+            const float x = samples[i];
+            m_lowPassPrev = m_lowPassPrev + m_lowPassAlpha * (x - m_lowPassPrev);
+            m_inputBuf->data[i] = static_cast<smpl_t>(m_lowPassPrev);
+        }
 
         aubio_tempo_do(m_aubioTempo, m_inputBuf, m_outputBuf);
         const bool tempoHit = (m_outputBuf->data[0] != static_cast<smpl_t>(0));
-        const float tempoConf = aubio_tempo_get_confidence(m_aubioTempo);
-        const bool strongTempo = tempoHit && (tempoConf >= kTempoConfTrigger);
+        const float conf = aubio_tempo_get_confidence(m_aubioTempo);
+        const bool hit = tempoHit && (conf >= kTempoConfTrigger);
 
-        float onsetValue = 0.0f;
-        if (m_aubioOnset != nullptr && m_onsetOut != nullptr) {
-            aubio_onset_do(m_aubioOnset, m_inputBuf, m_onsetOut);
-            onsetValue = static_cast<float>(aubio_onset_get_descriptor(m_aubioOnset));
+        float bpm = static_cast<float>(aubio_tempo_get_bpm(m_aubioTempo));
+        if (bpm > 150.0f) {
+            bpm /= 2.0f;
         }
+        if (!std::isfinite(bpm) || bpm < 1.0f) {
+            bpm = 120.0f;
+        }
+        /** 流行乐：理论拍间距 60000/bpm，乘 0.85 收紧防抖（原 0.8）。 */
+        static constexpr float kBeatIntervalTighten = 0.85f;
+        const int minInterval = static_cast<int>(60000.0f / bpm * kBeatIntervalTighten);
 
-        const bool intervalOk = !m_hasLastBeat || (m_lastBeatTime.elapsed() >= kHardMinIntervalMs);
-
-        if (strongTempo && intervalOk) {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (hit && (m_lastBeatWallMs == 0 || now - m_lastBeatWallMs >= minInterval)) {
+            m_lastBeatWallMs = now;
             emit beatDetected(kTempoIntensity);
-            m_lastBeatTime.restart();
-            m_hasLastBeat = true;
-        } else if (!strongTempo && intervalOk && onsetValue > m_onsetThreshold) {
-            emit beatDetected(kOnsetIntensity);
-            m_lastBeatTime.restart();
-            m_hasLastBeat = true;
         }
 
         m_pending.remove(0, hop);

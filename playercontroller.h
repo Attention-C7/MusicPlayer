@@ -98,7 +98,7 @@ private:
     /** Qt 6.8+：挂到 QMediaPlayer::setAudioBufferOutput，收解码 PCM（audioBufferReceived）。 */
     QAudioBufferOutput *m_audioBufferOutput = nullptr;
 #endif
-    /** RMS 节拍检测；在构造函数末尾 new，父对象为 this。 */
+    /** aubio_tempo（specflux 谱描述 + 节拍跟踪）；在构造函数末尾 new，父对象为 this。 */
     BeatDetector *m_beatDetector = nullptr;
     QMap<qint64, QString> m_currentLyrics;
     QList<SongInfo> m_playlist; //全量播放列表；唯一媒体索引 m_currentIndex / m_ctx.globalIndex 指向此表

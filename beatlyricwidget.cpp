@@ -1,6 +1,5 @@
 #include "beatlyricwidget.h"
 
-#include "beatdetector.h"
 #include "playwidget.h"
 #include "playercontroller.h"
 
@@ -333,8 +332,8 @@ void BeatLyricWidget::onBeat(float intensity)
     if (!isVisible()) {
         return;
     }
-    /** 须与 BeatDetector 一致：辅拍 kOnsetIntensity；阈值不得低于辅拍否则白幕节拍层不响应。 */
-    if (intensity < BeatDetector::kOnsetIntensity) {
+    /** 仅 tempo 路径时强度恒为 kTempoIntensity；过滤无效值。 */
+    if (intensity <= 0.0f) {
         return;
     }
     applyBeatFlash(intensity);
