@@ -3,6 +3,7 @@
 #include <QAudioBuffer>
 #include <QAudioFormat>
 #include <QDateTime>
+#include <QtDebug>
 
 #include <cmath>
 
@@ -244,11 +245,24 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         }
 
         aubio_tempo_do(m_aubioTempo, m_inputBuf, m_outputBuf);
-        const bool tempoHit = (m_outputBuf->data[0] != static_cast<smpl_t>(0));
-        const float conf = aubio_tempo_get_confidence(m_aubioTempo);
-        const bool hit = tempoHit && (conf >= kTempoConfTrigger);
 
-        float bpm = static_cast<float>(aubio_tempo_get_bpm(m_aubioTempo));
+        const bool beatPickHit = (m_outputBuf->data[0] != static_cast<smpl_t>(0));
+        const float bpmRaw = static_cast<float>(aubio_tempo_get_bpm(m_aubioTempo));
+        const float conf = static_cast<float>(aubio_tempo_get_confidence(m_aubioTempo));
+        float rmsAcc = 0.0f;
+        for (int i = 0; i < hop; ++i) {
+            const float s = static_cast<float>(m_inputBuf->data[i]);
+            rmsAcc += s * s;
+        }
+        const float rms = std::sqrt(rmsAcc / static_cast<float>(hop));
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        qDebug() << "[Beat]"
+                 << "hit=" << beatPickHit << "bpm=" << bpmRaw << "conf=" << conf << "rms=" << rms
+                 << "lastInterval=" << (now - m_lastBeatWallMs);
+
+        const bool hit = beatPickHit && (conf >= kTempoConfTrigger);
+
+        float bpm = bpmRaw;
         if (bpm > 150.0f) {
             bpm /= 2.0f;
         }
@@ -259,7 +273,6 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         static constexpr float kBeatIntervalTighten = 0.85f;
         const int minInterval = static_cast<int>(60000.0f / bpm * kBeatIntervalTighten);
 
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
         if (hit && (m_lastBeatWallMs == 0 || now - m_lastBeatWallMs >= minInterval)) {
             m_lastBeatWallMs = now;
             emit beatDetected(kTempoIntensity);
