@@ -21,8 +21,8 @@ class PlayWidget;
 class PlayerController;
 
 /**
- * 全屏节拍 + 歌词：白幕叠层与 PlayWidget 同公式（当前 alpha→峰值→0，峰值随 intensity，时长 150ms×2）；
- * 仅 intensity ≥ 0.6 时闪烁；无拍时叠层保持静止。
+ * 全屏节拍 + 歌词：背景渐变取专辑封面主题色（无封面时为淡粉）；同心波纹随歌词渐入（lyricAlpha）扩散、显隐；
+ * 白幕叠层与 PlayWidget 一致；强拍 intensity ≥ 0.6 触发闪烁。
  */
 class BeatLyricWidget : public QWidget
 {
@@ -34,7 +34,7 @@ public:
     explicit BeatLyricWidget(QWidget *parent = nullptr);
     ~BeatLyricWidget() override;
 
-    /** 用封面主色更新暖色渐变背景；可多次调用。 */
+    /** 用封面缩略平均色更新背景渐变与波纹主题色；无封面时为淡粉默认。 */
     void setBackgroundCover(const QPixmap &cover);
     /** 接入 PlayerController::beatDetected(float) → onBeat（QueuedConnection）。 */
     void setBeatSource(PlayerController *controller);
@@ -83,7 +83,8 @@ private:
 
     QColor m_gradTop;
     QColor m_gradBottom;
-    QString m_watermarkText;
+    /** 封面平均色，用于波纹描边 tint；无封面时为淡粉 accent。 */
+    QColor m_themeColor;
 
     QMetaObject::Connection m_beatConn;
     QMetaObject::Connection m_lyricConn;

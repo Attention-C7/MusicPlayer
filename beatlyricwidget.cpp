@@ -26,6 +26,17 @@ constexpr int kLyricFadeMs = 600;
 constexpr int kCloseBtnSize = 48;
 constexpr int kCloseBtnMargin = 16;
 
+/** 无封面时的淡粉渐变与波纹取色。 */
+constexpr int kDefaultPinkTopR = 255;
+constexpr int kDefaultPinkTopG = 235;
+constexpr int kDefaultPinkTopB = 244;
+constexpr int kDefaultPinkBotR = 255;
+constexpr int kDefaultPinkBotG = 205;
+constexpr int kDefaultPinkBotB = 224;
+constexpr int kDefaultPinkAccentR = 255;
+constexpr int kDefaultPinkAccentG = 160;
+constexpr int kDefaultPinkAccentB = 190;
+
 void layoutCloseButtonTopRight(QWidget *host, QPushButton *btn)
 {
     if (host == nullptr || btn == nullptr) {
@@ -36,12 +47,28 @@ void layoutCloseButtonTopRight(QWidget *host, QPushButton *btn)
     btn->raise();
 }
 
-QColor warmShift(const QColor &sample)
+void setDefaultPinkTheme(QColor *gradTop, QColor *gradBottom, QColor *themeColor)
 {
-    const int r = qBound(0, sample.red() + 40, 255);
-    const int g = qBound(0, sample.green() - 10, 255);
-    const int b = qBound(0, sample.blue() - 30, 255);
-    return QColor(r, g, b);
+    *gradTop = QColor(kDefaultPinkTopR, kDefaultPinkTopG, kDefaultPinkTopB);
+    *gradBottom = QColor(kDefaultPinkBotR, kDefaultPinkBotG, kDefaultPinkBotB);
+    *themeColor = QColor(kDefaultPinkAccentR, kDefaultPinkAccentG, kDefaultPinkAccentB);
+}
+
+/** 由封面平均色生成柔和渐变顶/底与波纹主题色。 */
+void gradientFromAverage(const QColor &avg, QColor *gradTop, QColor *gradBottom, QColor *themeColor)
+{
+    *themeColor = avg;
+    qreal h = 0.0;
+    qreal s = 0.0;
+    qreal l = 0.5;
+    qreal a = 1.0;
+    avg.getHslF(&h, &s, &l, &a);
+    const qreal sTop = qBound(0.0, s * 0.42, 1.0);
+    const qreal lTop = qBound(0.78, l + 0.14, 0.97);
+    const qreal sBot = qBound(0.0, s * 0.55, 1.0);
+    const qreal lBot = qBound(0.52, l - 0.08, 0.90);
+    *gradTop = QColor::fromHslF(h, sTop, lTop, a);
+    *gradBottom = QColor::fromHslF(h, sBot, lBot, a);
 }
 
 } // namespace
@@ -52,8 +79,9 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     , m_beatFlashRise(new QPropertyAnimation(this, "overlayAlpha", this))
     , m_beatFlashFall(new QPropertyAnimation(this, "overlayAlpha", this))
     , m_beatFlashGroup(new QSequentialAnimationGroup(this))
-    , m_gradTop(80, 40, 30)
-    , m_gradBottom(40, 20, 50)
+    , m_gradTop(kDefaultPinkTopR, kDefaultPinkTopG, kDefaultPinkTopB)
+    , m_gradBottom(kDefaultPinkBotR, kDefaultPinkBotG, kDefaultPinkBotB)
+    , m_themeColor(kDefaultPinkAccentR, kDefaultPinkAccentG, kDefaultPinkAccentB)
 {
     setObjectName(QStringLiteral("BeatLyricWidget"));
     setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
@@ -161,15 +189,13 @@ void BeatLyricWidget::setOverlayAlpha(float alpha)
 void BeatLyricWidget::updateWarmGradientFromCover(const QPixmap &cover)
 {
     if (cover.isNull()) {
-        m_gradTop = QColor(120, 60, 40);
-        m_gradBottom = QColor(50, 25, 35);
+        setDefaultPinkTheme(&m_gradTop, &m_gradBottom, &m_themeColor);
         return;
     }
 
     const QImage img = cover.toImage().scaled(48, 48, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
     if (img.isNull()) {
-        m_gradTop = QColor(120, 60, 40);
-        m_gradBottom = QColor(50, 25, 35);
+        setDefaultPinkTheme(&m_gradTop, &m_gradBottom, &m_themeColor);
         return;
     }
 
@@ -187,15 +213,12 @@ void BeatLyricWidget::updateWarmGradientFromCover(const QPixmap &cover)
         }
     }
     if (n <= 0) {
-        m_gradTop = QColor(120, 60, 40);
-        m_gradBottom = QColor(50, 25, 35);
+        setDefaultPinkTheme(&m_gradTop, &m_gradBottom, &m_themeColor);
         return;
     }
 
     const QColor avg(static_cast<int>(rs / n), static_cast<int>(gs / n), static_cast<int>(bs / n));
-    const QColor w = warmShift(avg);
-    m_gradTop = QColor(qMin(255, w.red() + 35), qMin(255, w.green() + 15), qMax(20, w.blue() - 25));
-    m_gradBottom = QColor(qMax(25, w.red() - 45), qMax(15, w.green() - 35), qMin(120, w.blue() + 40));
+    gradientFromAverage(avg, &m_gradTop, &m_gradBottom, &m_themeColor);
 }
 
 void BeatLyricWidget::applyBeatFlash(float intensity)
@@ -249,15 +272,6 @@ void BeatLyricWidget::onLyricLineChanged(int lineIndex, const QString &text)
         m_lyricAnim->start();
     } else {
         m_line2 = text;
-    }
-
-    const QString active = !m_line2.isEmpty() ? m_line2 : m_line1;
-    if (active.size() >= 2) {
-        m_watermarkText = active.right(2);
-    } else if (!active.isEmpty()) {
-        m_watermarkText = active;
-    } else {
-        m_watermarkText.clear();
     }
 
     update();
@@ -321,32 +335,34 @@ void BeatLyricWidget::paintEvent(QPaintEvent *event)
     const QPoint rc = r.center();
 
     QLinearGradient bg(0, 0, r.width(), 0);
-    const QColor leftTone = m_gradTop.darker(115);
-    const QColor rightTone = m_gradBottom.lighter(130);
+    const QColor leftTone = m_gradTop.darker(108);
+    const QColor rightTone = m_gradBottom.lighter(108);
     bg.setColorAt(0.0, leftTone);
-    bg.setColorAt(0.55, m_gradTop);
+    bg.setColorAt(0.5, m_gradTop);
     bg.setColorAt(1.0, rightTone);
     painter.fillRect(r, bg);
 
-    painter.setPen(Qt::NoPen);
+    const float fade = qBound(0.0f, m_lyricAlpha, 1.0f);
     const int maxRipple = qMax(r.width(), r.height());
-    for (int i = 1; i <= 8; ++i) {
-        const int radius = 80 + i * (maxRipple / 14);
-        const int a = qMax(8, 55 - i * 6);
-        painter.setBrush(Qt::NoBrush);
-        painter.setPen(QPen(QColor(255, 255, 255, a), i <= 3 ? 2 : 1));
+    constexpr int kRippleCount = 10;
+    painter.setBrush(Qt::NoBrush);
+    for (int i = 0; i < kRippleCount; ++i) {
+        const float t = static_cast<float>(i + 1) / static_cast<float>(kRippleCount);
+        const int baseR = 48 + (i * maxRipple) / 11;
+        const int spread = static_cast<int>(fade * maxRipple * 0.14f * (1.0f - t * 0.45f));
+        const int radius = baseR + spread;
+        const int baseA = 46 - i * 4;
+        const int a = static_cast<int>(static_cast<float>(qMax(0, baseA)) * fade);
+        if (a < 3) {
+            continue;
+        }
+        QColor ring = m_themeColor.lighter(100 + i * 5);
+        ring.setAlpha(qBound(0, a, 220));
+        const int penW = (fade >= 0.35f) ? (i < 4 ? 2 : 1) : 1;
+        painter.setPen(QPen(ring, penW));
         painter.drawEllipse(rc, radius, radius);
     }
     painter.setPen(Qt::NoPen);
-
-    if (!m_watermarkText.isEmpty()) {
-        QFont wf = painter.font();
-        wf.setPixelSize(qMin(260, qMax(120, r.height() / 3)));
-        wf.setBold(true);
-        painter.setFont(wf);
-        painter.setPen(QColor(255, 255, 255, 28));
-        painter.drawText(r, Qt::AlignCenter, m_watermarkText);
-    }
 
     if (m_overlayAlpha > 0.0f) {
         const int a = static_cast<int>(qBound(0.0f, m_overlayAlpha, 1.0f) * 255.0f);

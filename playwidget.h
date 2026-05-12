@@ -105,7 +105,7 @@ private:
     QList<SongInfo> m_allSongs;  //与 setSearchContext 参数对应的缓存，供语音部件检索。
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;
-    bool m_beatEffect;  //节拍效果开关：强拍（intensity≥0.6）时主界面叠层闪烁。
+    bool m_beatEffect;  //主界面节拍叠层开关；默认开，强拍（intensity≥0.6）时闪烁。
     float m_overlayAlpha;  //overlayAlpha 属性值，用于动画和绘制。与 Q_PROPERTY 绑定的叠层透明度存储。
     /** 节拍叠层：先 0→峰值再峰值→0，与 BeatLyricWidget 时长/峰值公式一致。 */
     QSequentialAnimationGroup *m_beatFlashGroup = nullptr;

@@ -39,7 +39,7 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_allSongs()
     , m_artistMap()
     , m_albumMap()
-    , m_beatEffect(false)
+    , m_beatEffect(true)
     , m_overlayAlpha(0.0f)
     , m_beatFlashRise(new QPropertyAnimation(this, "overlayAlpha", this))
     , m_beatFlashFall(new QPropertyAnimation(this, "overlayAlpha", this))
