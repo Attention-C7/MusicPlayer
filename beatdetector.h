@@ -12,15 +12,15 @@ class QAudioBuffer;
 /**
  * 节拍检测：按缓冲采样率懒初始化 aubio tempo（无 onset）。
  * 单声道 float 块送入 aubio_tempo；使用 aubio 默认 silence/threshold（不显式 set_*）。
- * 有 hit 且置信度 ≥ kTempoConfTrigger；防抖间隔按 BPM 折半后估算（60000/bpm*0.8 ms，墙钟）。
+ * 有 hit 且置信度 ≥ kTempoConfTrigger；防抖间隔按 BPM（可选折半）估算（60000/bpm*0.75 ms，墙钟）。
  */
 class BeatDetector : public QObject
 {
     Q_OBJECT
 
 public:
-    /** aubio_tempo_get_confidence 下限（与曾跑通配置对齐）。 */
-    static constexpr float kTempoConfTrigger = 0.15f;
+    /** aubio_tempo_get_confidence 下限；误触靠防抖间隔抑制。 */
+    static constexpr float kTempoConfTrigger = 0.05f;
     static constexpr float kTempoIntensity = 1.0f;
 
     explicit BeatDetector(QObject *parent = nullptr);
@@ -45,8 +45,6 @@ private:
     uint_t m_sampleRate = 0;
     /** aubio 引擎有效 hop 计数；重建后用于前若干 hop 仅预热、不参与 hit 判定。 */
     int m_tempoWarmupHopCount = 0;
-    /** 每次 aubio_tempo_do 后递增，用于周期性状态日志（与预热 hop 同序）。 */
-    int m_aubioHopFrameCount = 0;
 
     /** aubio 窗长（FFT）；须与 new_aubio_tempo 第二参一致。 */
     static constexpr uint_t WIN_SIZE = 2048;
