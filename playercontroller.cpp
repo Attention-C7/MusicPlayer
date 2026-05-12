@@ -470,10 +470,12 @@ void PlayerController::playByIndex(int index)
 void PlayerController::loadLrc(const SongInfo &song)
 {
     if (song.lrcPath.isEmpty()) {
+        m_currentLyrics.clear();
         emit lrcLoaded(QMap<qint64, QString>());
         return;
     }
     const QMap<qint64, QString> result = LrcParser::parse(song.lrcPath);
+    m_currentLyrics = result;
     emit lrcLoaded(result);
 }
 

@@ -49,6 +49,8 @@ set(PROJECT_SOURCES
         listwidget.ui
         beatdetector.cpp
         beatdetector.h
+        beatlyricwidget.cpp
+        beatlyricwidget.h
         lrcparser.cpp
         lrcparser.h
         lyriclinerow.cpp

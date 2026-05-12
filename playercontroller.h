@@ -49,6 +49,8 @@ public:
     int volumePercentBeforeMute() const; //静音前记忆的还原音量（用于取消静音前听力提示）
     /** 节拍检测器指针（构造末尾创建）；Qt 6.8+ 时另有 PCM 缓冲输出接入 feedBuffer。 */
     BeatDetector *beatDetector() const;
+    /** 当前曲目最近一次 loadLrc 解析结果（无文件或解析失败为空映射）。 */
+    const QMap<qint64, QString> &currentLyrics() const { return m_currentLyrics; }
     void setPlayMode(PlayMode mode); //设置播放模式,设置 SingleLoop / FolderLoop / AllLoop / RandomPlay，变化时 emit playModeChanged
     int currentIndex() const; //当前曲目在全量表中的索引（与 m_ctx.globalIndex 一致，由 playByIndex / setContext 维护）
     int currentScopeIndex() const; //当前曲目在 m_ctx.scopeList 中的索引（界面「第几首」）
@@ -96,6 +98,7 @@ private:
 #endif
     /** RMS 节拍检测；在构造函数末尾 new，父对象为 this。 */
     BeatDetector *m_beatDetector = nullptr;
+    QMap<qint64, QString> m_currentLyrics;
     QList<SongInfo> m_playlist; //全量播放列表；唯一媒体索引 m_currentIndex / m_ctx.globalIndex 指向此表
     PlayContext m_ctx;           //当前播放上下文（范围列表 + 范围内下标 + 全量下标）
     int m_currentIndex;          //当前曲目在全量表中的索引（冗余自 m_ctx.globalIndex，与 durationChanged 等lambda捕获一致）

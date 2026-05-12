@@ -52,6 +52,8 @@ public:
 
 signals:
     void showListRequested();   //用户点「列表」等操作时由 PlayWidget emit，MusicPlayer 收到后执行 showList()，从而 播放页不直接操作 ListWidget 几何，只发「请求」，降低与主窗口布局的耦合。
+    /** 当前高亮歌词行变化（毫秒时间轴索引 + 文本）；供 BeatLyricWidget 等订阅。 */
+    void lyricCurrentLineChanged(int lineIndex, const QString &text);
 
 private slots:
     void onVolumeButtonClicked();
@@ -62,6 +64,8 @@ private slots:
     void hideVolumePopupIfOpen();
     void onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState state);
     void onSessionPlaybackActiveChanged(bool active);
+    void onBeatButtonClicked();
+    void onBeatLyricFullscreenClosed();
 
 private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面、overlayAlpha 叠层等。
@@ -81,6 +85,9 @@ private:
     void setupVolumePopup();  //音量浮层：垂直滑条 + 百分比 + 静音，与 PlayerController 同步
     void repositionVolumePopup();  //锚定在音量按钮上方
     void refreshVolumeButtonIcon();  //根据音量/静音刷新工具栏喇叭图标
+    void showToast(const QString &message, int displayMs = 2500);  //短时提示（无歌词等）
+    /** 节拍按钮：根据是否有歌词更新提示文案、高亮（可进入节拍歌词全屏时暖色描边）。 */
+    void updateBeatLyricButtonState();
 
     void resizeEvent(QResizeEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
@@ -101,6 +108,7 @@ private:
     bool m_beatEffect;  //节拍效果开关，决定是否启动节拍定时器。
     float m_overlayAlpha;  //overlayAlpha 属性值，用于动画和绘制。与 Q_PROPERTY 绑定的叠层透明度存储。
     QPropertyAnimation *m_beatAnim;  //节拍动画，用于实现 overlayAlpha 动画效果。
+    QPixmap m_lastAlbumCover;
     bool m_isDragging;  //拖拽状态，决定是否启动长按检测。
     QTimer *m_longPressTimer;  //长按定时器，每 500ms 调用一次 onLongPress()。
     int m_pressDirection;  //长按方向，决定是否启动长按检测。

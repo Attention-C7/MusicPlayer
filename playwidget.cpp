@@ -1,13 +1,13 @@
 #include "playwidget.h"
 #include "ui_playwidget.h"
 
+#include "beatlyricwidget.h"
 #include "lyriclinerow.h"
 #include "volumesafety.h"
 
 #include <algorithm>
 
 #include <QCoreApplication>
-#include <QDebug>
 #include <QEvent>
 #include <QFileInfo>
 #include <QFrame>
@@ -24,6 +24,7 @@
 #include <QSlider>
 #include <QSpacerItem>
 #include <QStyle>
+#include <QToolTip>
 #include <QVBoxLayout>
 
 PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent)
@@ -65,8 +66,8 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
 
     m_beatTimer->setInterval(2000); // 与 start/stopBeatEffect 一致：兜底周期 2s
     m_beatTimer->setSingleShot(false);
-    m_beatAnim->setDuration(200);
-    m_beatAnim->setStartValue(0.15f);
+    m_beatAnim->setDuration(150);
+    m_beatAnim->setStartValue(0.45f);
     m_beatAnim->setEndValue(0.0f);
     connect(m_beatTimer, &QTimer::timeout, this, &PlayWidget::onBeat);
 
@@ -192,10 +193,12 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
         if (pixmap.isNull()) {
             ui->turntableAlbum->setAlbumPixmap(QPixmap());
             m_bgPixmap = QPixmap();
+            m_lastAlbumCover = QPixmap();
             update();
             return;
         }
 
+        m_lastAlbumCover = pixmap;
         updateBackground(pixmap);
         ui->turntableAlbum->setAlbumPixmap(pixmap);
     });
@@ -207,6 +210,7 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
         if (!m_lrcMap.isEmpty()) {
             buildLrcLabels();
         }
+        updateBeatLyricButtonState();
     });
 
     connect(ui->btn_playPause, &QPushButton::clicked, this, [this]() {
@@ -233,9 +237,7 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
         }
         m_controller->setPlayMode(nextMode);
     });
-    connect(ui->btn_beat, &QPushButton::clicked, this, [this]() {
-        setBeatEnabled(!m_beatEffect);
-    });
+    connect(ui->btn_beat, &QPushButton::clicked, this, &PlayWidget::onBeatButtonClicked);
 
     connect(ui->slider_progress, &QSlider::sliderPressed, this, [this]() {
         m_isDragging = true;
@@ -316,6 +318,8 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
     }
+
+    updateBeatLyricButtonState();
 }
 
 void PlayWidget::onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState state)
@@ -359,26 +363,22 @@ void PlayWidget::stopBeatEffect()
 
 void PlayWidget::onBeat()
 {
-    qDebug() << "[PlayWidget] onBeat triggered";
     if (!m_beatEffect) {
         return;
     }
 
     m_beatAnim->stop();
-    setOverlayAlpha(0.15f);
-    m_beatAnim->setStartValue(0.15f);
+    setOverlayAlpha(0.45f);
+    m_beatAnim->setStartValue(0.45f);
     m_beatAnim->setEndValue(0.0f);
+    m_beatAnim->setDuration(150);
     m_beatAnim->start();
 }
 
 void PlayWidget::setBeatEnabled(bool enabled)
 {
     m_beatEffect = enabled;
-    ui->btn_beat->setStyleSheet(
-        enabled
-            ? QStringLiteral("background-color: rgba(255,255,255,40); border-radius: 28px;")
-            : QString()
-    );
+    updateBeatLyricButtonState();
 
     if (!enabled) {
         stopBeatEffect();
@@ -399,6 +399,104 @@ void PlayWidget::setOverlayAlpha(float alpha)
 {
     m_overlayAlpha = qBound(0.0f, alpha, 1.0f);
     update();
+}
+
+void PlayWidget::showToast(const QString &message, int displayMs)
+{
+    const QPoint p = mapToGlobal(QPoint(width() / 2, height() / 2));
+    QToolTip::showText(p, message, this, QRect(), displayMs);
+}
+
+void PlayWidget::updateBeatLyricButtonState()
+{
+    const bool canEnterBeatLyric = !m_controller->currentLyrics().isEmpty();
+
+    ui->btn_beat->setToolTipDuration(8000);
+    if (canEnterBeatLyric) {
+        ui->btn_beat->setToolTip(QStringLiteral(
+            "当前歌曲已匹配歌词，可进入节拍歌词全屏\n（随节拍闪烁背景、双行歌词）"));
+    } else {
+        ui->btn_beat->setToolTip(QStringLiteral(
+            "当前歌曲无歌词文件，无法进入节拍歌词全屏\n（若有同名 .lrc，重新扫描曲库后可匹配）"));
+    }
+
+    QString sheet;
+    if (m_beatEffect) {
+        sheet = QStringLiteral(
+            "QPushButton {"
+            "background-color: rgba(255, 255, 255, 40);"
+            "border: 1px solid rgba(255, 255, 255, 120);"
+            "border-radius: 28px;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: rgba(255, 255, 255, 55);"
+            "border-color: rgba(255, 255, 255, 160);"
+            "}");
+    } else if (canEnterBeatLyric) {
+        sheet = QStringLiteral(
+            "QPushButton {"
+            "background-color: rgba(255, 200, 120, 45);"
+            "border: 2px solid rgba(255, 180, 80, 220);"
+            "border-radius: 28px;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: rgba(255, 210, 140, 70);"
+            "border-color: rgba(255, 200, 100, 255);"
+            "}");
+    } else {
+        sheet = QStringLiteral(
+            "QPushButton {"
+            "background-color: transparent;"
+            "border: 1px solid rgba(255, 255, 255, 55);"
+            "border-radius: 28px;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: rgba(255, 255, 255, 18);"
+            "border-color: rgba(255, 255, 255, 95);"
+            "}");
+    }
+    ui->btn_beat->setStyleSheet(sheet);
+}
+
+void PlayWidget::onBeatButtonClicked()
+{
+    const QList<BeatLyricWidget *> overlays = findChildren<BeatLyricWidget *>();
+    for (BeatLyricWidget *bl : overlays) {
+        if (bl != nullptr && bl->isVisible()) {
+            bl->closeWidget();
+            return;
+        }
+    }
+
+    if (m_controller->currentLyrics().isEmpty()) {
+        showToast(QStringLiteral("当前歌曲无歌词，无法进入节拍歌词全屏"), 3200);
+        return;
+    }
+
+    stopBeatEffect();
+    auto *w = new BeatLyricWidget(this);
+    w->setAudioController(m_controller->beatDetector());
+    w->setLyricController(this);
+    w->setBackgroundCover(m_lastAlbumCover);
+    if (m_currentLrcIndex >= 0 && m_currentLrcIndex < m_lrcTimesMs.size()) {
+        const QString t = m_lrcMap.value(m_lrcTimesMs[m_currentLrcIndex]);
+        w->onLyricLineChanged(m_currentLrcIndex, t);
+    } else if (!m_lrcTimesMs.isEmpty()) {
+        const QString t = m_lrcMap.value(m_lrcTimesMs.at(0));
+        w->onLyricLineChanged(0, t);
+    }
+    connect(w, &BeatLyricWidget::closed, this, &PlayWidget::onBeatLyricFullscreenClosed);
+    connect(w, &BeatLyricWidget::closed, w, &QWidget::deleteLater);
+    w->showFullScreen();
+    w->raise();
+    w->activateWindow();
+}
+
+void PlayWidget::onBeatLyricFullscreenClosed()
+{
+    if (m_beatEffect && m_controller->playbackState() == QMediaPlayer::PlayingState) {
+        startBeatEffect();
+    }
 }
 
 void PlayWidget::setSearchContext(
@@ -717,6 +815,8 @@ void PlayWidget::updateLrcDisplay(qint64 position)
     const int centerY = current->y() + (current->height() / 2);
     const int viewportHalf = ui->scrollArea_lrc->viewport()->height() / 2;
     ui->scrollArea_lrc->verticalScrollBar()->setValue(centerY - viewportHalf);
+
+    emit lyricCurrentLineChanged(m_currentLrcIndex, m_lrcMap.value(m_lrcTimesMs[m_currentLrcIndex]));
 }
 
 void PlayWidget::buildLrcLabels()
