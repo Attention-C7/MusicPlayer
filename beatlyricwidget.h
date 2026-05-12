@@ -1,6 +1,8 @@
 #pragma once
 
 #include <QColor>
+#include <QPixmap>
+#include <QSize>
 #include <QString>
 #include <QWidget>
 
@@ -9,20 +11,19 @@
 class QKeyEvent;
 class QMouseEvent;
 class QPaintEvent;
-class QPixmap;
 class QPropertyAnimation;
 class QPushButton;
 class QResizeEvent;
 class QSequentialAnimationGroup;
 class QShowEvent;
 class QHideEvent;
+class QTimer;
 
 class PlayWidget;
 class PlayerController;
 
 /**
- * 全屏节拍 + 歌词：背景渐变取专辑封面主题色（无封面时为淡粉）；同心波纹随歌词渐入（lyricAlpha）扩散、显隐；
- * 白幕叠层与 PlayWidget 一致；强拍 intensity ≥ 0.6 触发闪烁。
+ * 全屏节拍 + 歌词：底层大号模糊封面+压暗，再叠主题色半透明渐变、暗角与呼吸波纹；无封面时仅用渐变主题。
  */
 class BeatLyricWidget : public QWidget
 {
@@ -34,7 +35,7 @@ public:
     explicit BeatLyricWidget(QWidget *parent = nullptr);
     ~BeatLyricWidget() override;
 
-    /** 用封面缩略平均色更新背景渐变与波纹主题色；无封面时为淡粉默认。 */
+    /** 用封面更新底层模糊垫图与主题渐变/波纹色；无封面时清除垫图。 */
     void setBackgroundCover(const QPixmap &cover);
     /** 接入 PlayerController::beatDetected(float) → onBeat（QueuedConnection）。 */
     void setBeatSource(PlayerController *controller);
@@ -68,6 +69,7 @@ private:
     void setOverlayAlpha(float alpha);
 
     void updateWarmGradientFromCover(const QPixmap &cover);
+    void rebuildBackdrop();
 
     void applyBeatFlash(float intensity);
 
@@ -86,8 +88,15 @@ private:
     /** 封面平均色，用于波纹描边 tint；无封面时为淡粉 accent。 */
     QColor m_themeColor;
 
+    QPixmap m_sourceCover;
+    QPixmap m_coverBackdrop;
+    QSize m_backdropSize;
+
     QMetaObject::Connection m_beatConn;
     QMetaObject::Connection m_lyricConn;
 
     QPushButton *m_closeButton = nullptr;
+    /** 驱动波纹相位，形成水波式缓慢起伏（非完美静态同心圆）。 */
+    QTimer *m_waveTimer = nullptr;
+    float m_ripplePhase = 0.0f;
 };
