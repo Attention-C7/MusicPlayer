@@ -3,8 +3,9 @@
 #include <QAudioBuffer>
 #include <QAudioFormat>
 #include <QDateTime>
-#include <QDebug> // feedBuffer 临时能量日志；与下方节流宏配合，调完阈值可删
+#include <QDebug> // 能量行日志；调参稳定后可删或改条件编译
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
@@ -128,7 +129,6 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         return;
     }
 
-    // 运行期确认 PCM 是否到达：默认仅 Debug 输出；Release 需跟踪时在 CMake 加 MUSICPLAYER_BEATDETECTOR_TRACE
 #if defined(MUSICPLAYER_BEATDETECTOR_TRACE) || defined(QT_DEBUG)
     static int s_feedLogCount = 0;
     ++s_feedLogCount;
@@ -139,36 +139,35 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
     }
 #endif
 
-    // 1) PCM → float 等效采样并算本帧 RMS
+    // 1) 本帧 RMS（peak）
     const float rms = computeFrameRmsAsFloat(buffer);
+    const float peak = rms;
 
-    // 2) 写入滑动窗，超长则丢最旧
+    // 2) 写入滑动窗
     m_energyHistory.append(rms);
     while (m_energyHistory.size() > WINDOW) {
         m_energyHistory.removeFirst();
     }
 
-    // 3) 冷启动：未满 WINDOW 帧不参与阈值判定
+    // 3) 冷启动：未满 WINDOW 帧不判定
     if (m_energyHistory.size() < WINDOW) {
         return;
     }
 
-    // 4) 当前窗内（含本帧）能量的算术平均
-    double sum = 0.0;
-    for (float e : m_energyHistory) {
-        sum += static_cast<double>(e);
-    }
-    const float avg = static_cast<float>(sum / static_cast<double>(WINDOW));
+    // 4) baseline = 窗内最小 RMS：安静段低，强拍相对比值大（渐进音乐下比「对平均」更敏感）
+    const float baseline = *std::min_element(m_energyHistory.cbegin(), m_energyHistory.cend());
 
-    // 临时：观察 rms / avg / 判定阈值（含本帧的 avg）；调阈值或 RMS 后删除整段
+    // 临时：观察 peak / baseline / 判定门限
     static int s_energyLogCount = 0;
     if (++s_energyLogCount <= 15 || (s_energyLogCount % 128) == 0) {
-        qDebug() << "[Beat] rms=" << rms << "avg=" << avg << "threshold=" << (avg * THRESHOLD);
+        qDebug() << "[Beat] peak=" << peak << "baseline=" << baseline << "threshold=" << (baseline * THRESHOLD);
     }
 
-    // 5) 相对均值突增 + 防抖：距上次触发须超过 MIN_INTERVAL ms
+    // 5) peak 相对 baseline 突增 + 绝对能量门限 + 防抖
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (rms > avg * THRESHOLD && (now - m_lastBeatTime) > static_cast<qint64>(MIN_INTERVAL)) {
+    if (peak > baseline * THRESHOLD
+        && peak > MIN_PEAK_RMS
+        && (now - m_lastBeatTime) > static_cast<qint64>(MIN_INTERVAL)) {
         m_lastBeatTime = now;
         emit beatDetected();
     }

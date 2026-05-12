@@ -8,8 +8,9 @@
 class QAudioBuffer;
 
 /**
- * 短时 RMS 能量 onset 检测：每帧 QAudioBuffer 算 RMS，与最近 WINDOW 帧均值比较；
- * 超过阈值且满足最小间隔则发 beatDetected。仅支持 Float / SInt16 PCM（见 cpp）。
+ * 短时 RMS onset：每帧算 RMS，保留最近 WINDOW 帧；用窗内最小 RMS 作 baseline，
+ * 当前 peak 明显高于 baseline（且高于静音门限）时发 beatDetected，并做时间防抖。
+ * PCM 仅支持 Float / SInt16（见 cpp）。
  */
 class BeatDetector : public QObject
 {
@@ -18,23 +19,23 @@ class BeatDetector : public QObject
 public:
     explicit BeatDetector(QObject *parent = nullptr);
 
-    /** 送入一帧解码 PCM；内部更新滑动能量窗并可能触发 beatDetected。
-     *  调试：Debug 构建下会节流输出 qDebug「[BeatDetector] feedBuffer…」以确认是否被调用；
-     *  Release 下可在 CMake 对目标定义 MUSICPLAYER_BEATDETECTOR_TRACE 开启同样日志。
+    /** 送入一帧解码 PCM；更新能量窗并可能触发 beatDetected。
+     *  调试：MUSICPLAYER_BEATDETECTOR_TRACE 或 QT_DEBUG 下可打 feedBuffer 到达日志（见 cpp）。
      */
     void feedBuffer(const QAudioBuffer &buffer);
 
 signals:
-    /** 检测到疑似节拍（能量相对滑动均值突增且通过防抖间隔）。 */
+    /** 检测到疑似节拍（peak 相对窗内 baseline 突增且通过防抖）。 */
     void beatDetected();
 
 private:
-    /** 最近若干帧的 RMS 能量，长度至多为 WINDOW；用于滑动平均。 */
+    /** 最近 WINDOW 帧的 RMS，用于取 baseline = min(窗)。 */
     QList<float> m_energyHistory;
-    /** 上次 emit beatDetected 的墙钟时间（ms）；与 MIN_INTERVAL 配合防抖。 */
+    /** 上次 emit beatDetected 的墙钟时间（ms）。 */
     qint64 m_lastBeatTime = 0;
 
-    static constexpr int WINDOW = 20;             // 滑动窗口帧数（冷启动未满不判定）
-    static constexpr float THRESHOLD = 1.5f;      // 当前 RMS 相对均值倍数阈值
-    static constexpr int MIN_INTERVAL = 200;    // 两次触发最小间隔（ms）
+    static constexpr int WINDOW = 8;              // 窗越短 baseline 跟得越紧，易反映真实起伏
+    static constexpr float THRESHOLD = 1.2f;      // peak 需超过 baseline 的倍数
+    static constexpr float MIN_PEAK_RMS = 0.05f;  // 当前帧 RMS 下限，抑制纯静音/底噪误触
+    static constexpr int MIN_INTERVAL = 200;      // 两次触发最小间隔（ms）
 };
