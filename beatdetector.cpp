@@ -5,9 +5,38 @@
 #include <QDateTime>
 #include <QtDebug>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
+
+#if QT_VERSION_MAJOR >= 6
+/**
+ * Planar float 立体声：左声道为连续 frameCount 个 float，右声道在后半段（与交错同总长时无法区分）。
+ * 仅左平面装入 buffer（总字节 = frameCount*sizeof(float)）而格式仍为 stereo 时，字节数少于交错帧长，可自动识别。
+ * 全平面同总长：设环境变量 MUSICPLAYER_BEAT_PLANAR_FLOAT=1，按「前半为左」读取。
+ */
+bool isPlanarFloatStereoBuffer(const QAudioBuffer &buffer, const QAudioFormat &fmt, int frameCount, int channelCount)
+{
+    if (fmt.sampleFormat() != QAudioFormat::Float || channelCount != 2 || frameCount <= 0) {
+        return false;
+    }
+    const qsizetype nbytes = buffer.byteCount();
+    const int bpf = fmt.bytesPerFrame();
+    if (bpf <= 0) {
+        return false;
+    }
+    const qsizetype expectedInterleaved = static_cast<qsizetype>(frameCount) * bpf;
+    const qsizetype onePlaneBytes = static_cast<qsizetype>(frameCount) * static_cast<int>(sizeof(float));
+    if (nbytes == onePlaneBytes && nbytes < expectedInterleaved) {
+        return true;
+    }
+    if (qEnvironmentVariableIntValue("MUSICPLAYER_BEAT_PLANAR_FLOAT") != 0 && nbytes == expectedInterleaved) {
+        return true;
+    }
+    return false;
+}
+#endif
 
 bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
 {
@@ -25,8 +54,8 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
 
     out->reserve(frameCount);
 
-    /** 交错 PCM：第 f 帧起点 data[f*channelCount]；立体声 frame[0]=L、frame[1]=R，单声道取左即 frame[0]。
-     * 错误：for (i=0;i<frameCount*channelCount;++i) out->append(data[i]) 会把 R 与下一帧 L 等混成一条无帧边界的序列。 */
+    /** 交错 PCM：第 f 帧起点 data[f*channelCount]；立体声取 frame[0]（左）。Float 立体声 planar 见 isPlanarFloatStereoBuffer。
+     * 错误：for (i=0;i<frameCount*channelCount;++i) out->append(data[i]) 会把多声道混成一条无帧边界的序列。 */
 
 #if QT_VERSION_MAJOR >= 6
     switch (format.sampleFormat()) {
@@ -34,6 +63,12 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         const float *const data = reinterpret_cast<const float *>(buffer.constData<float>());
         if (data == nullptr) {
             return false;
+        }
+        if (isPlanarFloatStereoBuffer(buffer, format, frameCount, channelCount)) {
+            for (int i = 0; i < frameCount; ++i) {
+                out->append(data[i]);
+            }
+            return true;
         }
         for (int f = 0; f < frameCount; ++f) {
             const float *const frame = data + f * channelCount;
@@ -243,8 +278,12 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
     const int hop = static_cast<int>(HOP_SIZE);
     while (m_pending.size() >= hop) {
         const float *const samples = m_pending.constData();
+        /** aubio 期望约 0.01~0.1 量级；解码 RMS 过小时放大并限幅防削波。 */
+        static constexpr float kInputGain = 20.0f;
         for (int i = 0; i < hop; ++i) {
-            m_inputBuf->data[i] = static_cast<smpl_t>(samples[i]);
+            float amplified = samples[i] * kInputGain;
+            amplified = std::clamp(amplified, -1.0f, 1.0f);
+            m_inputBuf->data[i] = static_cast<smpl_t>(amplified);
         }
 
         qDebug() << "[Beat] feeding chunk, inputBuf->length=" << static_cast<int>(m_inputBuf->length)
@@ -260,10 +299,9 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
             const float s = static_cast<float>(m_inputBuf->data[i]);
             rmsAcc += s * s;
         }
-        const float rms = std::sqrt(rmsAcc / static_cast<float>(hop));
+        const float rmsAmp = std::sqrt(rmsAcc / static_cast<float>(hop));
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        qDebug() << "[Beat]"
-                 << "hit=" << beatPickHit << "bpm=" << bpmRaw << "conf=" << conf << "rms=" << rms
+        qDebug() << "[Beat] amplified rms=" << rmsAmp << "hit=" << beatPickHit << "bpm=" << bpmRaw << "conf=" << conf
                  << "lastInterval=" << (now - m_lastBeatWallMs);
 
         const bool hit = beatPickHit && (conf >= kTempoConfTrigger);
