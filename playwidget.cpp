@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include <QCoreApplication>
+#include <QDebug>
 #include <QEvent>
 #include <QFileInfo>
 #include <QFrame>
@@ -358,6 +359,7 @@ void PlayWidget::stopBeatEffect()
 
 void PlayWidget::onBeat()
 {
+    qDebug() << "[PlayWidget] onBeat triggered";
     if (!m_beatEffect) {
         return;
     }
