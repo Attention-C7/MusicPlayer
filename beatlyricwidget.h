@@ -19,16 +19,14 @@ class BeatDetector;
 class PlayWidget;
 
 /**
- * 全屏节拍 + 歌词：参考「动效歌词」思路用节拍驱动短时视觉反馈（径向闪白 + 轻暖色脉冲），
- * 非 QQ 音乐 ASS 序列帧方案；背景波纹、大字水印、歌词阴影贴近常见手电筒/氛围歌词样式。
+ * 全屏节拍 + 歌词：节拍叠层与 PlayWidget 一致（白幕 alpha 0.45→0 / 150ms），
+ * 另含背景波纹、水印字、歌词阴影等氛围绘制。
  */
 class BeatLyricWidget : public QWidget
 {
     Q_OBJECT
     Q_PROPERTY(float lyricAlpha READ lyricAlpha WRITE setLyricAlpha)
     Q_PROPERTY(float overlayAlpha READ overlayAlpha WRITE setOverlayAlpha)
-    /** 节拍「手电筒」闪白层：径向高光，峰值约 0.55，短衰减。 */
-    Q_PROPERTY(float flashAlpha READ flashAlpha WRITE setFlashAlpha)
 
 public:
     explicit BeatLyricWidget(QWidget *parent = nullptr);
@@ -65,8 +63,6 @@ private:
     void setLyricAlpha(float alpha);
     float overlayAlpha() const;
     void setOverlayAlpha(float alpha);
-    float flashAlpha() const;
-    void setFlashAlpha(float alpha);
 
     void updateWarmGradientFromCover(const QPixmap &cover);
 
@@ -74,10 +70,8 @@ private:
     QString m_line2;
     float m_lyricAlpha = 0.0f;
     float m_overlayAlpha = 0.0f;
-    float m_flashAlpha = 0.0f;
     QPropertyAnimation *m_lyricAnim = nullptr;
     QPropertyAnimation *m_beatAnim = nullptr;
-    QPropertyAnimation *m_flashAnim = nullptr;
     int m_currentIndex = 0;
 
     QColor m_gradTop;

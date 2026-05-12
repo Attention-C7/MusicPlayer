@@ -11,9 +11,7 @@
 #include <QPaintEvent>
 #include <QPropertyAnimation>
 #include <QPixmap>
-#include <QRadialGradient>
 #include <QScreen>
-#include <QEasingCurve>
 #include <QMetaObject>
 #include <QPushButton>
 #include <QResizeEvent>
@@ -22,10 +20,9 @@
 namespace {
 
 constexpr int kLyricFontPx = 48;
-constexpr int kBeatWarmMs = 140;
-constexpr int kFlashDecayMs = 220;
-constexpr float kFlashPeak = 0.62f;
-constexpr float kWarmPulsePeak = 0.12f;
+/** 与 PlayWidget::onBeat 一致：整屏白叠层峰值与时长（毫秒）。 */
+constexpr int kBeatOverlayMs = 150;
+constexpr float kBeatOverlayPeak = 0.45f;
 constexpr int kLyricFadeMs = 600;
 constexpr int kCloseBtnSize = 48;
 constexpr int kCloseBtnMargin = 16;
@@ -54,7 +51,6 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     : QWidget(parent)
     , m_lyricAnim(new QPropertyAnimation(this, "lyricAlpha", this))
     , m_beatAnim(new QPropertyAnimation(this, "overlayAlpha", this))
-    , m_flashAnim(new QPropertyAnimation(this, "flashAlpha", this))
     , m_gradTop(80, 40, 30)
     , m_gradBottom(40, 20, 50)
 {
@@ -68,15 +64,9 @@ BeatLyricWidget::BeatLyricWidget(QWidget *parent)
     m_lyricAnim->setStartValue(0.0f);
     m_lyricAnim->setEndValue(1.0f);
 
-    m_beatAnim->setDuration(kBeatWarmMs);
-    m_beatAnim->setStartValue(kWarmPulsePeak);
+    m_beatAnim->setDuration(kBeatOverlayMs);
+    m_beatAnim->setStartValue(kBeatOverlayPeak);
     m_beatAnim->setEndValue(0.0f);
-    m_beatAnim->setEasingCurve(QEasingCurve::OutQuad);
-
-    m_flashAnim->setDuration(kFlashDecayMs);
-    m_flashAnim->setStartValue(0.0f);
-    m_flashAnim->setEndValue(0.0f);
-    m_flashAnim->setEasingCurve(QEasingCurve::OutCubic);
 
     m_closeButton = new QPushButton(QStringLiteral("×"), this);
     m_closeButton->setObjectName(QStringLiteral("beatLyricClose"));
@@ -168,17 +158,6 @@ void BeatLyricWidget::setOverlayAlpha(float alpha)
     update();
 }
 
-float BeatLyricWidget::flashAlpha() const
-{
-    return m_flashAlpha;
-}
-
-void BeatLyricWidget::setFlashAlpha(float alpha)
-{
-    m_flashAlpha = qBound(0.0f, alpha, 1.0f);
-    update();
-}
-
 void BeatLyricWidget::updateWarmGradientFromCover(const QPixmap &cover)
 {
     if (cover.isNull()) {
@@ -221,23 +200,15 @@ void BeatLyricWidget::updateWarmGradientFromCover(const QPixmap &cover)
 
 void BeatLyricWidget::onBeat()
 {
-    if (m_flashAnim != nullptr) {
-        m_flashAnim->stop();
-        setFlashAlpha(kFlashPeak);
-        m_flashAnim->setStartValue(kFlashPeak);
-        m_flashAnim->setEndValue(0.0f);
-        m_flashAnim->setDuration(kFlashDecayMs);
-        m_flashAnim->start();
+    if (m_beatAnim == nullptr) {
+        return;
     }
-
-    if (m_beatAnim != nullptr) {
-        m_beatAnim->stop();
-        setOverlayAlpha(kWarmPulsePeak);
-        m_beatAnim->setStartValue(kWarmPulsePeak);
-        m_beatAnim->setEndValue(0.0f);
-        m_beatAnim->setDuration(kBeatWarmMs);
-        m_beatAnim->start();
-    }
+    m_beatAnim->stop();
+    setOverlayAlpha(kBeatOverlayPeak);
+    m_beatAnim->setStartValue(kBeatOverlayPeak);
+    m_beatAnim->setEndValue(0.0f);
+    m_beatAnim->setDuration(kBeatOverlayMs);
+    m_beatAnim->start();
 }
 
 void BeatLyricWidget::onLyricLineChanged(int lineIndex, const QString &text)
@@ -355,22 +326,7 @@ void BeatLyricWidget::paintEvent(QPaintEvent *event)
 
     if (m_overlayAlpha > 0.0f) {
         const int a = static_cast<int>(qBound(0.0f, m_overlayAlpha, 1.0f) * 255.0f);
-        painter.fillRect(r, QColor(255, 210, 150, a));
-    }
-
-    if (m_flashAlpha > 0.0f) {
-        const float fa = qBound(0.0f, m_flashAlpha, 1.0f);
-        const int baseA = static_cast<int>(fa * 220.0f);
-        const QPointF flashOrigin(static_cast<qreal>(r.center().x()), static_cast<qreal>(r.height() * 0.08));
-        const qreal flashR = static_cast<qreal>(qMax(r.width(), r.height())) * 0.95;
-        QRadialGradient flash(flashOrigin, flashR);
-        flash.setColorAt(0.0, QColor(255, 255, 255, baseA));
-        flash.setColorAt(0.25, QColor(255, 248, 220, static_cast<int>(baseA * 0.45f)));
-        flash.setColorAt(0.55, QColor(255, 200, 120, static_cast<int>(baseA * 0.18f)));
-        flash.setColorAt(1.0, QColor(255, 255, 255, 0));
-        painter.setCompositionMode(QPainter::CompositionMode_Plus);
-        painter.fillRect(r, flash);
-        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        painter.fillRect(r, QColor(255, 255, 255, a));
     }
 
     const int wText = r.width() - 100;
