@@ -25,6 +25,9 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
 
     out->reserve(frameCount);
 
+    /** 交错 PCM：第 f 帧起点 data[f*channelCount]；立体声 frame[0]=L、frame[1]=R，单声道取左即 frame[0]。
+     * 错误：for (i=0;i<frameCount*channelCount;++i) out->append(data[i]) 会把 R 与下一帧 L 等混成一条无帧边界的序列。 */
+
 #if QT_VERSION_MAJOR >= 6
     switch (format.sampleFormat()) {
     case QAudioFormat::Float: {
@@ -34,11 +37,7 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         }
         for (int f = 0; f < frameCount; ++f) {
             const float *const frame = data + f * channelCount;
-            if (channelCount >= 2) {
-                out->append(0.5f * (frame[0] + frame[1]));
-            } else {
-                out->append(frame[0]);
-            }
+            out->append(frame[0]);
         }
         return true;
     }
@@ -50,11 +49,7 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         constexpr float kInv = 1.0f / 32768.0f;
         for (int f = 0; f < frameCount; ++f) {
             const qint16 *const frame = data + f * channelCount;
-            if (channelCount >= 2) {
-                out->append(0.5f * (static_cast<float>(frame[0]) + static_cast<float>(frame[1])) * kInv);
-            } else {
-                out->append(static_cast<float>(frame[0]) * kInv);
-            }
+            out->append(static_cast<float>(frame[0]) * kInv);
         }
         return true;
     }
@@ -66,11 +61,7 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         constexpr float kInv = 1.0f / 2147483648.0f;
         for (int f = 0; f < frameCount; ++f) {
             const qint32 *const frame = data + f * channelCount;
-            if (channelCount >= 2) {
-                out->append(0.5f * (static_cast<float>(frame[0]) + static_cast<float>(frame[1])) * kInv);
-            } else {
-                out->append(static_cast<float>(frame[0]) * kInv);
-            }
+            out->append(static_cast<float>(frame[0]) * kInv);
         }
         return true;
     }
@@ -82,13 +73,7 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         constexpr float kInv = 1.0f / 128.0f;
         for (int f = 0; f < frameCount; ++f) {
             const quint8 *const frame = data + f * channelCount;
-            if (channelCount >= 2) {
-                out->append(
-                    0.5f * ((static_cast<float>(frame[0]) - 128.0f) + (static_cast<float>(frame[1]) - 128.0f))
-                            * kInv);
-            } else {
-                out->append((static_cast<float>(frame[0]) - 128.0f) * kInv);
-            }
+            out->append((static_cast<float>(frame[0]) - 128.0f) * kInv);
         }
         return true;
     }
@@ -112,11 +97,7 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         }
         for (int f = 0; f < frameCount; ++f) {
             const float *const frame = reinterpret_cast<const float *>(bytes + f * bytesPerFrame);
-            if (channelCount >= 2) {
-                out->append(0.5f * (frame[0] + frame[1]));
-            } else {
-                out->append(frame[0]);
-            }
+            out->append(frame[0]);
         }
         return true;
     }
@@ -127,11 +108,7 @@ bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
         constexpr float kInv = 1.0f / 32768.0f;
         for (int f = 0; f < frameCount; ++f) {
             const qint16 *const frame = reinterpret_cast<const qint16 *>(bytes + f * bytesPerFrame);
-            if (channelCount >= 2) {
-                out->append(0.5f * (static_cast<float>(frame[0]) + static_cast<float>(frame[1])) * kInv);
-            } else {
-                out->append(static_cast<float>(frame[0]) * kInv);
-            }
+            out->append(static_cast<float>(frame[0]) * kInv);
         }
         return true;
     }
@@ -221,6 +198,35 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
     if (!buffer.isValid() || buffer.frameCount() <= 0) {
         return;
     }
+
+    const QAudioFormat bf = buffer.format();
+    qDebug() << "[Beat] buffer format=" << static_cast<int>(bf.sampleFormat())
+             << "channels=" << bf.channelCount()
+             << "frames=" << buffer.frameCount();
+
+#if QT_VERSION_MAJOR >= 6
+    if (bf.sampleFormat() == QAudioFormat::Float) {
+        const float *const data = buffer.constData<float>();
+        const int ch = bf.channelCount();
+        const int fc = buffer.frameCount();
+        if (data != nullptr && ch > 0 && fc > 0 && (fc * ch) >= 4) {
+            qDebug() << "[Beat] raw samples[0..3]=" << data[0] << data[1] << data[2] << data[3];
+        }
+    } else {
+        qDebug() << "[Beat] raw float samples skipped (sampleFormat not Float)";
+    }
+#else
+    if (bf.sampleType() == QAudioFormat::Float && (bf.sampleSize() / 8) == static_cast<int>(sizeof(float))) {
+        const float *const data = reinterpret_cast<const float *>(buffer.constData());
+        const int ch = bf.channelCount();
+        const int fc = buffer.frameCount();
+        if (data != nullptr && ch > 0 && fc > 0 && (fc * ch) >= 4) {
+            qDebug() << "[Beat] raw samples[0..3]=" << data[0] << data[1] << data[2] << data[3];
+        }
+    } else {
+        qDebug() << "[Beat] raw float samples skipped (sampleType not Float)";
+    }
+#endif
 
     const int sr = buffer.format().sampleRate();
     if (!ensureAnalysisEngine(sr)) {
