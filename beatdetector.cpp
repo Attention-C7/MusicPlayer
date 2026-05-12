@@ -38,36 +38,28 @@ float computeFrameRmsAsFloat(const QAudioBuffer &buffer)
     double sumSq = 0.0;
 
 #if QT_VERSION_MAJOR >= 6
-    const int bytesPerFrame = format.bytesPerFrame();
-    if (bytesPerFrame <= 0) {
-        return 0.0f;
-    }
-    const char *bytes = reinterpret_cast<const char *>(buffer.constData());
-    if (bytes == nullptr) {
-        return 0.0f;
-    }
-
+    // Qt 6.11+：仅模板 constData<T>() 为公开 API；勿调用无模板 constData()（已 private）。
     switch (format.sampleFormat()) {
     case QAudioFormat::Float: {
-        // 32bit float，典型范围 [-1, 1]
-        for (int f = 0; f < frameCount; ++f) {
-            const float *frame = reinterpret_cast<const float *>(bytes + f * bytesPerFrame);
-            for (int ch = 0; ch < channelCount; ++ch) {
-                const float s = frame[ch];
-                sumSq += static_cast<double>(s) * static_cast<double>(s);
-            }
+        const float *data = buffer.constData<float>();
+        if (data == nullptr) {
+            return 0.0f;
+        }
+        for (int i = 0; i < sampleCount; ++i) {
+            const float s = data[i];
+            sumSq += static_cast<double>(s) * static_cast<double>(s);
         }
         break;
     }
     case QAudioFormat::Int16: {
-        // 归一化到约 [-1, 1] 再参与 RMS
+        const qint16 *data = buffer.constData<qint16>();
+        if (data == nullptr) {
+            return 0.0f;
+        }
         constexpr float kInv = 1.0f / 32768.0f;
-        for (int f = 0; f < frameCount; ++f) {
-            const qint16 *frame = reinterpret_cast<const qint16 *>(bytes + f * bytesPerFrame);
-            for (int ch = 0; ch < channelCount; ++ch) {
-                const float s = static_cast<float>(frame[ch]) * kInv;
-                sumSq += static_cast<double>(s) * static_cast<double>(s);
-            }
+        for (int i = 0; i < sampleCount; ++i) {
+            const float s = static_cast<float>(data[i]) * kInv;
+            sumSq += static_cast<double>(s) * static_cast<double>(s);
         }
         break;
     }
