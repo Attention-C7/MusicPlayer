@@ -184,6 +184,7 @@ void BeatDetector::releaseAnalysisEngine()
     m_pending.clear();
     m_lastBeatWallMs = 0;
     m_tempoWarmupHopCount = 0;
+    m_aubioHopFrameCount = 0;
 }
 
 bool BeatDetector::ensureAnalysisEngine(int sampleRate)
@@ -239,35 +240,6 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         return;
     }
 
-    const QAudioFormat bf = buffer.format();
-    qDebug() << "[Beat] buffer format=" << static_cast<int>(bf.sampleFormat())
-             << "channels=" << bf.channelCount()
-             << "frames=" << buffer.frameCount();
-
-#if QT_VERSION_MAJOR >= 6
-    if (bf.sampleFormat() == QAudioFormat::Float) {
-        const float *const data = buffer.constData<float>();
-        const int ch = bf.channelCount();
-        const int fc = buffer.frameCount();
-        if (data != nullptr && ch > 0 && fc > 0 && (fc * ch) >= 4) {
-            qDebug() << "[Beat] raw samples[0..3]=" << data[0] << data[1] << data[2] << data[3];
-        }
-    } else {
-        qDebug() << "[Beat] raw float samples skipped (sampleFormat not Float)";
-    }
-#else
-    if (bf.sampleType() == QAudioFormat::Float && (bf.sampleSize() / 8) == static_cast<int>(sizeof(float))) {
-        const float *const data = reinterpret_cast<const float *>(buffer.constData());
-        const int ch = bf.channelCount();
-        const int fc = buffer.frameCount();
-        if (data != nullptr && ch > 0 && fc > 0 && (fc * ch) >= 4) {
-            qDebug() << "[Beat] raw samples[0..3]=" << data[0] << data[1] << data[2] << data[3];
-        }
-    } else {
-        qDebug() << "[Beat] raw float samples skipped (sampleType not Float)";
-    }
-#endif
-
     const int sr = buffer.format().sampleRate();
     if (!ensureAnalysisEngine(sr)) {
         return;
@@ -291,17 +263,15 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
             m_inputBuf->data[i] = static_cast<smpl_t>(amplified);
         }
 
-        qDebug() << "[Beat] feeding chunk, inputBuf->length=" << static_cast<int>(m_inputBuf->length)
-                 << "pending size before=" << m_pending.size();
-
-        qDebug() << "[Beat] inputBuf before tempo_do:"
-                 << static_cast<double>(m_inputBuf->data[0]) << static_cast<double>(m_inputBuf->data[1])
-                 << static_cast<double>(m_inputBuf->data[2]) << static_cast<double>(m_inputBuf->data[3]);
-
         aubio_tempo_do(m_aubioTempo, m_inputBuf, m_outputBuf);
 
-        qDebug() << "[Beat] outputBuf[0]=" << static_cast<double>(m_outputBuf->data[0])
-                 << "outputBuf[1]=" << static_cast<double>(m_outputBuf->data[1]);
+        ++m_aubioHopFrameCount;
+        static constexpr int kAubioStatusLogIntervalHops = 500;
+        if (m_aubioHopFrameCount > 0 && (m_aubioHopFrameCount % kAubioStatusLogIntervalHops) == 0) {
+            const float bpmStatus = static_cast<float>(aubio_tempo_get_bpm(m_aubioTempo));
+            const float confStatus = static_cast<float>(aubio_tempo_get_confidence(m_aubioTempo));
+            qDebug() << "[Beat] frame=" << m_aubioHopFrameCount << "bpm=" << bpmStatus << "conf=" << confStatus;
+        }
 
         ++m_tempoWarmupHopCount;
         /** 前 100 个 hop 仅预热 aubio，不解析 hit/BPM 防抖（outputBuf[0] 常长期为 0 属正常）。 */
@@ -314,15 +284,26 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         const bool beatPickHit = (m_outputBuf->data[0] != static_cast<smpl_t>(0));
         const float bpmRaw = static_cast<float>(aubio_tempo_get_bpm(m_aubioTempo));
         const float conf = static_cast<float>(aubio_tempo_get_confidence(m_aubioTempo));
-        float rmsAcc = 0.0f;
-        for (int i = 0; i < hop; ++i) {
-            const float s = static_cast<float>(m_inputBuf->data[i]);
-            rmsAcc += s * s;
+
+        if (beatPickHit) {
+            float rmsAccHit = 0.0f;
+            for (int i = 0; i < hop; ++i) {
+                const float s = static_cast<float>(m_inputBuf->data[i]);
+                rmsAccHit += s * s;
+            }
+            const float rmsHit = std::sqrt(rmsAccHit / static_cast<float>(hop));
+            qDebug() << "[Beat] HIT! frame=" << m_aubioHopFrameCount
+                     << "inputBuf[0..3]=" << static_cast<double>(m_inputBuf->data[0])
+                     << static_cast<double>(m_inputBuf->data[1]) << static_cast<double>(m_inputBuf->data[2])
+                     << static_cast<double>(m_inputBuf->data[3]) << "outputBuf[0]="
+                     << static_cast<double>(m_outputBuf->data[0]) << "outputBuf[1]="
+                     << static_cast<double>(m_outputBuf->data[1])
+                     << "feeding inputLen=" << static_cast<int>(m_inputBuf->length)
+                     << "pending=" << m_pending.size() << "amplifiedRms=" << rmsHit << "bpm=" << bpmRaw
+                     << "conf=" << conf;
         }
-        const float rmsAmp = std::sqrt(rmsAcc / static_cast<float>(hop));
+
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        qDebug() << "[Beat] amplified rms=" << rmsAmp << "hit=" << beatPickHit << "bpm=" << bpmRaw << "conf=" << conf
-                 << "lastInterval=" << (now - m_lastBeatWallMs);
 
         const bool hit = beatPickHit && (conf >= kTempoConfTrigger);
 

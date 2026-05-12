@@ -45,6 +45,8 @@ private:
     uint_t m_sampleRate = 0;
     /** aubio 引擎有效 hop 计数；重建后用于前若干 hop 仅预热、不参与 hit 判定。 */
     int m_tempoWarmupHopCount = 0;
+    /** 每次 aubio_tempo_do 后递增，用于周期性状态日志（与预热 hop 同序）。 */
+    int m_aubioHopFrameCount = 0;
 
     /** aubio 窗长（FFT）；须与 new_aubio_tempo 第二参一致。 */
     static constexpr uint_t WIN_SIZE = 2048;
