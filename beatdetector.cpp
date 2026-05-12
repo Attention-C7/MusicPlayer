@@ -3,10 +3,7 @@
 #include <QAudioBuffer>
 #include <QAudioFormat>
 #include <QDateTime>
-
-#if defined(MUSICPLAYER_BEATDETECTOR_TRACE) || defined(QT_DEBUG)
-#include <QDebug>
-#endif
+#include <QDebug> // feedBuffer 临时能量日志；与下方节流宏配合，调完阈值可删
 
 #include <cmath>
 
@@ -162,6 +159,12 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         sum += static_cast<double>(e);
     }
     const float avg = static_cast<float>(sum / static_cast<double>(WINDOW));
+
+    // 临时：观察 rms / avg / 判定阈值（含本帧的 avg）；调阈值或 RMS 后删除整段
+    static int s_energyLogCount = 0;
+    if (++s_energyLogCount <= 15 || (s_energyLogCount % 128) == 0) {
+        qDebug() << "[Beat] rms=" << rms << "avg=" << avg << "threshold=" << (avg * THRESHOLD);
+    }
 
     // 5) 相对均值突增 + 防抖：距上次触发须超过 MIN_INTERVAL ms
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
