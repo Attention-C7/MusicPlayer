@@ -226,6 +226,7 @@ void BeatDetector::resetOnsetDynamics()
     m_onsetHistory.clear();
     m_dynamicOnsetThreshold = m_onsetThreshold;
     m_onsetPeakEstimate = m_onsetThreshold;
+    m_onsetMaxRecent = 0.1f;
 }
 
 void BeatDetector::setOnsetThreshold(float value)
@@ -352,12 +353,22 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         }
 
         float onsetValue = 0.0f;
+        float onsetNorm = 0.0f;
         bool onsetHit = false;
         if (m_onset != nullptr && m_onsetOut != nullptr) {
             aubio_onset_do(m_onset, m_inputBuf, m_onsetOut);
             onsetValue = static_cast<float>(aubio_onset_get_descriptor(m_onset));
 
-            m_onsetHistory.push_back(onsetValue);
+            m_onsetMaxRecent = std::max(onsetValue, m_onsetMaxRecent * 0.995f);
+            if (m_onsetMaxRecent < 0.1f) {
+                m_onsetMaxRecent = 0.1f;
+            }
+            onsetNorm = onsetValue / m_onsetMaxRecent;
+            if (onsetNorm > 1.0f) {
+                onsetNorm = 1.0f;
+            }
+
+            m_onsetHistory.push_back(onsetNorm);
             if (static_cast<int>(m_onsetHistory.size()) > kOnsetHistoryMax) {
                 m_onsetHistory.pop_front();
             }
@@ -366,18 +377,20 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
                 std::vector<float> sorted(m_onsetHistory.begin(), m_onsetHistory.end());
                 std::sort(sorted.begin(), sorted.end());
                 const size_t n = sorted.size();
-                const size_t idx75 = (n * 3u) / 4u;
-                const float percentile75 = sorted.at(idx75);
+                const size_t mid = n / 2u;
+                const float median = sorted.at(mid);
                 m_onsetPeakEstimate = m_onsetPeakEstimate * 0.99f
-                    + (std::max(m_onsetPeakEstimate, percentile75) * 0.01f);
+                    + (std::max(m_onsetPeakEstimate, median) * 0.01f);
+                const float medianScaled = median * 1.2f;
+                const float medianThresh = std::min(1.0f, medianScaled);
                 m_dynamicOnsetThreshold = std::max(
-                    {m_onsetThreshold, m_onsetFloorSoft, percentile75 * m_dynPercentileScale});
+                    {m_onsetThreshold, m_onsetFloorSoft, medianThresh});
             }
 
             m_statDynThresholdSum += static_cast<double>(m_dynamicOnsetThreshold);
             ++m_statDynThresholdCount;
 
-            onsetHit = (onsetValue >= m_dynamicOnsetThreshold);
+            onsetHit = (onsetNorm >= m_dynamicOnsetThreshold);
         }
 
         if (tempoHit) {
@@ -390,7 +403,7 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         const bool beatCandidate = tempoHit || onsetHit;
 
         float dynamicMinGapMs = static_cast<float>(kHardMinIntervalMs);
-        if (m_phaseLocked) {
+        if (m_phaseLocked && m_strongBeatCount >= 8) {
             const float periodMs = (m_beatPeriodSamples / static_cast<float>(m_sampleRate)) * 1000.0f;
             dynamicMinGapMs = std::max(180.0f, periodMs * 0.5f);
         }
@@ -405,15 +418,17 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
             } else {
                 ++m_statEmit;
                 emittedReal = true;
-                emit beatDetected(calculateBeatIntensity(onsetHit, onsetValue, tempoConf, false));
+                emit beatDetected(calculateBeatIntensity(onsetHit, onsetNorm, tempoConf, false));
 
                 if (m_lastBeatSample >= 0) {
-                    const float intervalSamples = static_cast<float>(hopEndSample - m_lastBeatSample);
-                    m_beatPeriodSamples = 0.3f * intervalSamples + 0.7f * m_beatPeriodSamples;
-                    float bpm = static_cast<float>(m_sampleRate) * 60.0f / m_beatPeriodSamples;
-                    bpm = std::clamp(bpm, 40.0f, 220.0f);
-                    m_beatPeriodSamples = static_cast<float>(m_sampleRate) * 60.0f / bpm;
-                    notifyBpmUpdated();
+                    if (tempoConf > 0.25f || onsetNorm > 0.5f) {
+                        const float intervalSamples = static_cast<float>(hopEndSample - m_lastBeatSample);
+                        m_beatPeriodSamples = 0.3f * intervalSamples + 0.7f * m_beatPeriodSamples;
+                        float bpm = static_cast<float>(m_sampleRate) * 60.0f / m_beatPeriodSamples;
+                        bpm = std::clamp(bpm, 60.0f, 180.0f);
+                        m_beatPeriodSamples = static_cast<float>(m_sampleRate) * 60.0f / bpm;
+                        notifyBpmUpdated();
+                    }
                 }
                 m_lastBeatSample = hopEndSample;
                 ++m_strongBeatCount;
@@ -426,18 +441,23 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         }
 
         if (!emittedReal && !beatTooSoon && m_phaseLocked && m_predictBeatCount < 2) {
-            const qint64 earlyMargin = static_cast<qint64>(m_beatPeriodSamples * 0.2f + 0.5f);
-            if (hopEndSample >= m_nextBeatSample - earlyMargin) {
-                ++m_statEmit;
-                ++m_statEmitPredicted;
-                emit beatDetected(calculatePredictedIntensity());
-                m_lastBeatSample = hopEndSample;
-                m_nextBeatSample += static_cast<qint64>(m_beatPeriodSamples + 0.5f);
-                ++m_predictBeatCount;
-                if (m_predictBeatCount >= 2) {
-                    m_phaseLocked = false;
-                    m_strongBeatCount = 0;
-                    m_predictBeatCount = 0;
+            const float currentBpm = (m_sampleRate > 0 && m_beatPeriodSamples > 1e-6f)
+                ? (static_cast<float>(m_sampleRate) * 60.0f / m_beatPeriodSamples)
+                : 0.0f;
+            if (currentBpm <= 180.0f) {
+                const qint64 earlyMargin = static_cast<qint64>(m_beatPeriodSamples * 0.2f + 0.5f);
+                if (hopEndSample >= m_nextBeatSample - earlyMargin) {
+                    ++m_statEmit;
+                    ++m_statEmitPredicted;
+                    emit beatDetected(calculatePredictedIntensity());
+                    m_lastBeatSample = hopEndSample;
+                    m_nextBeatSample += static_cast<qint64>(m_beatPeriodSamples + 0.5f);
+                    ++m_predictBeatCount;
+                    if (m_predictBeatCount >= 2) {
+                        m_phaseLocked = false;
+                        m_strongBeatCount = 0;
+                        m_predictBeatCount = 0;
+                    }
                 }
             }
         }

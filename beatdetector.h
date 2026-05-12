@@ -14,8 +14,8 @@ class QAudioBuffer;
 /**
  * 节拍检测：按缓冲实际采样率懒初始化 aubio。
  * - tempo：aubio 二值 + 置信度门限；高 BPM 半速估计
- * - onset：ODF 连续值 + 滑动分位数动态阈值
- * - 融合：beatCandidate = tempoHit || onsetHit；最小间隔在样本域随锁相动态收紧
+ * - onset：ODF 连续值，按近期峰值归一化后入窗，滑动中位数×1.2 动态阈值
+ * - 融合：beatCandidate = tempoHit || onsetHit；最小间隔在样本域仅在锁相且强拍≥8 后随周期动态收紧
  * - 样本域时间轴 + PLL：连续 4 个真实拍后锁相，漏拍时最多 2 次低强度预测插补
  * - 灵敏度预设：Normal / BoostWeak / ReduceFalse，调节 tempo 门限、onset 基础值与动态分位数权重
  * - bpmUpdated：周期估计变化时发当前 BPM，供 UI 呼吸兜底
@@ -38,7 +38,7 @@ public:
 
     void feedBuffer(const QAudioBuffer &buffer);
 
-    /** 切换预设：调整 tempo 置信门限、onset 基础阈值、动态分位数系数与软下限；会重置 onset 滑动窗口。 */
+    /** 切换预设：调整 tempo 置信门限、onset 基础阈值与软下限；会重置 onset 滑动窗口。 */
     void setSensitivity(Sensitivity s);
     Sensitivity sensitivity() const { return m_sensitivity; }
 
@@ -95,11 +95,13 @@ private:
     float m_onsetThreshold = 0.3f;
     float m_onsetSilenceDb = -70.0f;
 
-    /** 滑动分位数得到的检测阈值；引擎重置时与 m_onsetThreshold 对齐。 */
+    /** 动态 onset 检测阈值；引擎重置时与 m_onsetThreshold 对齐。 */
     float m_dynamicOnsetThreshold = 0.3f;
-    /** 最近若干 hop 的 ODF 原始值（aubio_onset_get_descriptor），用于分位数阈值。 */
+    /** 最近若干 hop 的归一化 onset（0～1 量级），用于中位数动态阈值。 */
     std::deque<float> m_onsetHistory;
     static constexpr int kOnsetHistoryMax = 86;
+    /** 归一化分母：近期 ODF 峰值（带衰减），与 onset 原始值同量纲；重置为 0.1f。 */
+    float m_onsetMaxRecent = 0.1f;
     /** 归一化参考峰值（缓慢跟踪分位水平）。 */
     float m_onsetPeakEstimate = 0.3f;
 
@@ -121,7 +123,7 @@ private:
     Sensitivity m_sensitivity = Normal;
     /** tempo 二值后置信度下限，随 Sensitivity 变化。 */
     float m_tempoConfTrigger = 0.1f;
-    /** 动态阈值中 max(onsetFloor, p75 * scale) 的 scale。 */
+    /** 灵敏度预设同步（动态阈值为滑动中位数×1.2，本系数暂不参与计算）。 */
     float m_dynPercentileScale = 0.5f;
     /** 动态阈值中与 m_onsetThreshold 并列的软下限。 */
     float m_onsetFloorSoft = 0.08f;
