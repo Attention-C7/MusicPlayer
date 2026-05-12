@@ -169,8 +169,6 @@ void BeatDetector::releaseAnalysisEngine()
         m_outputBuf = nullptr;
     }
     m_sampleRate = 0;
-    m_lowPassPrev = 0.0f;
-    m_lowPassAlpha = 0.0f;
     m_pending.clear();
     m_lastBeatWallMs = 0;
 }
@@ -187,31 +185,15 @@ bool BeatDetector::ensureAnalysisEngine(int sampleRate)
 
     releaseAnalysisEngine();
 
-    /** 流行音乐底鼓主导：specflux 对频谱瞬变更敏感；silence/threshold 与 aubio_tempo 峰值拾取一致。 */
-    static constexpr float kPopTempoSilenceDb = -40.0f;
-    static constexpr float kPopTempoInternalThreshold = 0.3f;
-
+    /** default + 2048/256 与曾跑通配置一致；采样率用缓冲实际值（勿硬编码 44100，免 48k 等错位）。 */
     m_inputBuf = new_fvec(HOP_SIZE);
     m_outputBuf = new_fvec(2);
-    m_aubioTempo = new_aubio_tempo("specflux", WIN_SIZE, HOP_SIZE, sr);
+    m_aubioTempo = new_aubio_tempo("default", WIN_SIZE, HOP_SIZE, sr);
 
     if (m_inputBuf == nullptr || m_outputBuf == nullptr || m_aubioTempo == nullptr) {
         releaseAnalysisEngine();
         return false;
     }
-
-    aubio_tempo_set_silence(m_aubioTempo, static_cast<smpl_t>(kPopTempoSilenceDb));
-    aubio_tempo_set_threshold(m_aubioTempo, static_cast<smpl_t>(kPopTempoInternalThreshold));
-
-    /** 一阶 IIR 低通近似截止 fc：alpha ≈ 2π*fc/fs（与 44100Hz 下 0.027 同量级）。 */
-    static constexpr float kKickBandFcHz = 200.0f;
-    static constexpr float kTwoPi = 6.28318530717958647692f;
-    float alpha = (kTwoPi * kKickBandFcHz) / static_cast<float>(sr);
-    if (alpha > 0.99f) {
-        alpha = 0.99f;
-    }
-    m_lowPassAlpha = alpha;
-    m_lowPassPrev = 0.0f;
 
     m_sampleRate = sr;
     return true;
@@ -239,9 +221,7 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
     while (m_pending.size() >= hop) {
         const float *const samples = m_pending.constData();
         for (int i = 0; i < hop; ++i) {
-            const float x = samples[i];
-            m_lowPassPrev = m_lowPassPrev + m_lowPassAlpha * (x - m_lowPassPrev);
-            m_inputBuf->data[i] = static_cast<smpl_t>(m_lowPassPrev);
+            m_inputBuf->data[i] = static_cast<smpl_t>(samples[i]);
         }
 
         aubio_tempo_do(m_aubioTempo, m_inputBuf, m_outputBuf);
@@ -269,8 +249,8 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         if (!std::isfinite(bpm) || bpm < 1.0f) {
             bpm = 120.0f;
         }
-        /** 流行乐：理论拍间距 60000/bpm，乘 0.85 收紧防抖（原 0.8）。 */
-        static constexpr float kBeatIntervalTighten = 0.85f;
+        /** 理论拍间距 60000/bpm，乘 0.8 防抖。 */
+        static constexpr float kBeatIntervalTighten = 0.8f;
         const int minInterval = static_cast<int>(60000.0f / bpm * kBeatIntervalTighten);
 
         if (hit && (m_lastBeatWallMs == 0 || now - m_lastBeatWallMs >= minInterval)) {
