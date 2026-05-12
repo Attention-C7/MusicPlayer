@@ -12,8 +12,8 @@ class QAudioBuffer;
 /**
  * 节拍检测：按缓冲实际采样率懒初始化 aubio。
  * - tempo：强节奏 / 流行（置信度 + BPM 软间隔）
- * - onset specflux：民谣 / 吉他起音
- * 双轨并集后经硬下限 +（高置信 tempo 时）BPM 软间隔防抖再 emit beatDetected。
+ * - onset specflux：弱鼓时起音；高置信 tempo 时本 hop 不再并入 onset，减轻 POP 过密
+ * - 仅 onset 路径使用略长硬间隔，减轻民谣「一字一音」快于真拍
  */
 class BeatDetector : public QObject
 {

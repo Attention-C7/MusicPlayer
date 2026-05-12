@@ -9,8 +9,14 @@
 
 namespace {
 
-/** 硬下限：任意 emit 之间至少间隔（onset 密、弱 tempo 时主导）。 */
-constexpr qint64 kHardMinIntervalMs = 220;
+/** 硬下限：任意 emit 至少间隔（与 onset-only 下限取 max）。 */
+constexpr qint64 kHardMinIntervalMs = 260;
+/** 仅 onset 触发时额外下限（民谣一字一音易密于真拍，略拉长更稳）。 */
+constexpr qint64 kOnsetLedMinIntervalMs = 300;
+/**
+ * 本 hop 已判定 tempo 拍且置信度 ≥ 此值时，不再把 onset 并入触发（减少 POP 里吉他起音叠在鼓点上闪得过密）。
+ */
+constexpr float kTempoConfGateOnset = 0.27f;
 /** tempo 置信度达到此值才启用 BPM 软间隔（略低于触发门限，避免卡在边缘）。 */
 constexpr float kTempoConfForSoftGap = 0.22f;
 constexpr float kTempoConfTrigger = 0.15f;
@@ -261,10 +267,16 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
             ++m_statRawOnset;
         }
 
-        if (tempoHit || onsetHit) {
+        const bool gateOnsetByTempo = tempoHit && (tempoConf >= kTempoConfGateOnset);
+        const bool beatCandidate = tempoHit || (onsetHit && !gateOnsetByTempo);
+
+        if (beatCandidate) {
             const qint64 now = QDateTime::currentMSecsSinceEpoch();
 
             qint64 minGapMs = kHardMinIntervalMs;
+            if (!tempoHit && onsetHit) {
+                minGapMs = qMax(minGapMs, kOnsetLedMinIntervalMs);
+            }
             if (tempoHit && tempoConf >= kTempoConfForSoftGap && tempoBpm > kBpmMin && tempoBpm < kBpmMax) {
                 const qint64 tempoGap = static_cast<qint64>(60000.0 / static_cast<double>(tempoBpm) * static_cast<double>(kSoftGapBeatFraction));
                 if (tempoGap > minGapMs) {
