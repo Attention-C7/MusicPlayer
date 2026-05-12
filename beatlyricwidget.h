@@ -23,7 +23,7 @@ class PlayWidget;
 class PlayerController;
 
 /**
- * 全屏节拍 + 歌词：底层大号模糊封面+压暗，再叠主题色半透明渐变、暗角与呼吸波纹；无封面时仅用渐变主题。
+ * 全屏节拍 + 歌词：底层大号模糊封面+压暗，再叠主题色半透明渐变、暗角；波纹为自左右两侧推向中间的弧面（轻时相摆），随歌词渐入显隐；强拍仅白幕叠层。
  */
 class BeatLyricWidget : public QWidget
 {
@@ -96,7 +96,7 @@ private:
     QMetaObject::Connection m_lyricConn;
 
     QPushButton *m_closeButton = nullptr;
-    /** 驱动波纹相位，形成水波式缓慢起伏（非完美静态同心圆）。 */
+    /** 驱动波纹时间相位：屏外左右圆心弧面推向中线，与节拍强度无关。 */
     QTimer *m_waveTimer = nullptr;
     float m_ripplePhase = 0.0f;
 };

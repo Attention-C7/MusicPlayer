@@ -470,41 +470,48 @@ void BeatLyricWidget::paintEvent(QPaintEvent *event)
     vig.setColorAt(1.0, QColor(0, 0, 0, static_cast<int>(78.0f * (0.25f + 0.75f * fade))));
     painter.fillRect(r, vig);
 
+    /** 两侧向中间：圆心在屏外左右，半径增大时弧面向中线推进；仅随歌词渐入与时间相位轻摆，与节拍强度无关。 */
+    const int wPx = r.width();
+    const int cy = rc.y();
+    constexpr int kSideInset = 108;
+    const QPoint leftCenter(-kSideInset, cy);
+    const QPoint rightCenter(wPx + kSideInset, cy);
+
     const float ph = m_ripplePhase;
-    constexpr int kRippleCount = 11;
+    constexpr int kRippleCount = 9;
     painter.setBrush(Qt::NoBrush);
     for (int i = 0; i < kRippleCount; ++i) {
         const float fi = static_cast<float>(i);
-        const float breathe = 0.55f + 0.45f * std::sin(ph + fi * 0.62f);
-        const float spreadWave = std::sin(ph * 0.88f - fi * 0.38f);
-        const float t = (fi + 1.0f) / static_cast<float>(kRippleCount);
-
-        const int jx = static_cast<int>(std::sin(ph * 0.71f + fi * 0.95f) * 16.0f * fade);
-        const int jy = static_cast<int>(std::cos(ph * 0.66f + fi * 0.78f) * 11.0f * fade);
-        const QPoint c = rc + QPoint(jx, jy);
-
-        const int baseR = 44 + (i * maxDim) / 10;
-        const int spread = static_cast<int>(
-            fade * maxDim * 0.15f * (1.0f - t * 0.48f) * (0.78f + 0.22f * breathe));
-        const int wobble = static_cast<int>(9.0f * std::sin(ph + fi * 0.47f) * fade);
-        const int radius = baseR + spread + wobble;
-
-        const int baseA = 36 - i * 3;
-        const float shimmer = 0.5f + 0.5f * breathe * (0.88f + 0.12f * spreadWave);
-        const int a = static_cast<int>(static_cast<float>(qMax(0, baseA)) * fade * shimmer);
-        if (a < 5) {
+        const float drift = std::sin(ph * 0.78f + fi * 0.42f) * 12.0f * fade;
+        const int radius = static_cast<int>(
+            kSideInset + 32 + fi * (static_cast<float>(wPx) * 0.068f) + drift);
+        if (radius < kSideInset + 8) {
             continue;
         }
 
-        QColor halo = m_themeColor;
-        halo.setAlpha(qBound(0, static_cast<int>(static_cast<float>(a) * 0.42f), 105));
-        painter.setPen(QPen(halo, 5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawEllipse(c, radius + 3, radius + 3);
+        const int baseA = 38 - i * 4;
+        const float soft = 0.62f + 0.38f * std::sin(ph * 0.55f + fi * 0.38f);
+        const int a = static_cast<int>(static_cast<float>(qMax(0, baseA)) * fade * soft);
+        if (a < 6) {
+            continue;
+        }
 
-        QColor core = m_themeColor.lighter(102 + i * 3);
-        core.setAlpha(qBound(0, a, 195));
+        const QRect ringL(leftCenter.x() - radius - 3, leftCenter.y() - radius - 3, (radius + 3) * 2, (radius + 3) * 2);
+        const QRect ringR(rightCenter.x() - radius - 3, rightCenter.y() - radius - 3, (radius + 3) * 2, (radius + 3) * 2);
+
+        QColor halo = m_themeColor;
+        halo.setAlpha(qBound(0, static_cast<int>(static_cast<float>(a) * 0.36f), 92));
+        painter.setPen(QPen(halo, 5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        painter.drawEllipse(ringL);
+        painter.drawEllipse(ringR);
+
+        QColor core = m_themeColor.lighter(103 + i * 2);
+        core.setAlpha(qBound(0, a, 168));
         painter.setPen(QPen(core, 2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-        painter.drawEllipse(c, radius, radius);
+        painter.drawEllipse(
+            QRect(leftCenter.x() - radius, leftCenter.y() - radius, radius * 2, radius * 2));
+        painter.drawEllipse(
+            QRect(rightCenter.x() - radius, rightCenter.y() - radius, radius * 2, radius * 2));
     }
     painter.setPen(Qt::NoPen);
 
