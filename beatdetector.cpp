@@ -2,16 +2,14 @@
 
 #include <QAudioBuffer>
 #include <QAudioFormat>
-#include <QDateTime>
-#include <QDebug> // 临时：[Beat] lowRms / diff / prevLowRms
-#include <QVector>
+#include <QDebug>
 
-#include <cmath>
+#include <cstring>
 
 namespace {
 
-/** 将本缓冲区内交错标量采样解码为 float（Float 原样；Int16 /32768）。失败返回 false。 */
-bool decodeInterleavedFloats(const QAudioBuffer &buffer, QVector<float> *out)
+/** 取第 0 声道 mono float：Float 直接按交错指针步进 channelCount；Int16 除 32768。 */
+bool bufferToMonoFloatSamples(const QAudioBuffer &buffer, QVector<float> *out)
 {
     out->clear();
     if (!buffer.isValid()) {
@@ -25,33 +23,28 @@ bool decodeInterleavedFloats(const QAudioBuffer &buffer, QVector<float> *out)
         return false;
     }
 
-    const int sampleCount = frameCount * channelCount;
-    if (sampleCount <= 0) {
-        return false;
-    }
-
-    out->reserve(sampleCount);
+    out->reserve(frameCount);
 
 #if QT_VERSION_MAJOR >= 6
     switch (format.sampleFormat()) {
     case QAudioFormat::Float: {
-        const float *data = buffer.constData<float>();
+        const float *const data = reinterpret_cast<const float *>(buffer.constData<float>());
         if (data == nullptr) {
             return false;
         }
-        for (int i = 0; i < sampleCount; ++i) {
-            out->append(data[i]);
+        for (int f = 0; f < frameCount; ++f) {
+            out->append(data[f * channelCount]);
         }
         return true;
     }
     case QAudioFormat::Int16: {
-        const qint16 *data = buffer.constData<qint16>();
+        const qint16 *const data = reinterpret_cast<const qint16 *>(buffer.constData<qint16>());
         if (data == nullptr) {
             return false;
         }
         constexpr float kInv = 1.0f / 32768.0f;
-        for (int i = 0; i < sampleCount; ++i) {
-            out->append(static_cast<float>(data[i]) * kInv);
+        for (int f = 0; f < frameCount; ++f) {
+            out->append(static_cast<float>(data[f * channelCount]) * kInv);
         }
         return true;
     }
@@ -63,7 +56,7 @@ bool decodeInterleavedFloats(const QAudioBuffer &buffer, QVector<float> *out)
     if (bytesPerFrame <= 0) {
         return false;
     }
-    const char *bytes = reinterpret_cast<const char *>(buffer.constData());
+    const char *const bytes = reinterpret_cast<const char *>(buffer.constData());
     if (bytes == nullptr) {
         return false;
     }
@@ -74,10 +67,8 @@ bool decodeInterleavedFloats(const QAudioBuffer &buffer, QVector<float> *out)
             return false;
         }
         for (int f = 0; f < frameCount; ++f) {
-            const float *frame = reinterpret_cast<const float *>(bytes + f * bytesPerFrame);
-            for (int ch = 0; ch < channelCount; ++ch) {
-                out->append(frame[ch]);
-            }
+            const float *const frame = reinterpret_cast<const float *>(bytes + f * bytesPerFrame);
+            out->append(frame[0]);
         }
         return true;
     }
@@ -87,10 +78,8 @@ bool decodeInterleavedFloats(const QAudioBuffer &buffer, QVector<float> *out)
         }
         constexpr float kInv = 1.0f / 32768.0f;
         for (int f = 0; f < frameCount; ++f) {
-            const qint16 *frame = reinterpret_cast<const qint16 *>(bytes + f * bytesPerFrame);
-            for (int ch = 0; ch < channelCount; ++ch) {
-                out->append(static_cast<float>(frame[ch]) * kInv);
-            }
+            const qint16 *const frame = reinterpret_cast<const qint16 *>(bytes + f * bytesPerFrame);
+            out->append(static_cast<float>(frame[0]) * kInv);
         }
         return true;
     }
@@ -100,76 +89,77 @@ bool decodeInterleavedFloats(const QAudioBuffer &buffer, QVector<float> *out)
 #endif
 }
 
-/**
- * 每 DOWNSAMPLE_STRIDE 个采样取算术均值得到一个低频采样；对整帧低频序列求 RMS。
- * 尾部不足一组的标量丢弃。组数为 0 时返回 false。
- */
-bool computeDownsampledLowRms(const QVector<float> &samples, int stride, float *outLowRms)
-{
-    if (stride <= 0 || outLowRms == nullptr) {
-        return false;
-    }
-    const int n = samples.size();
-    const int groups = n / stride;
-    if (groups <= 0) {
-        return false;
-    }
-
-    double sumSq = 0.0;
-    for (int g = 0; g < groups; ++g) {
-        double mean = 0.0;
-        const int base = g * stride;
-        for (int k = 0; k < stride; ++k) {
-            mean += static_cast<double>(samples.at(base + k));
-        }
-        mean /= static_cast<double>(stride);
-        sumSq += mean * mean;
-    }
-
-    *outLowRms = static_cast<float>(std::sqrt(sumSq / static_cast<double>(groups)));
-    return true;
-}
-
 } // namespace
 
 BeatDetector::BeatDetector(QObject *parent)
     : QObject(parent)
 {
+    setObjectName(QStringLiteral("BeatDetector"));
+    m_inputBuf = new_fvec(HOP_SIZE);
+    m_outputBuf = new_fvec(2);
+    m_tempo = new_aubio_tempo("default", WIN_SIZE, HOP_SIZE, SAMPLE_RATE);
+    if (m_inputBuf == nullptr || m_outputBuf == nullptr || m_tempo == nullptr) {
+        if (m_tempo != nullptr) {
+            del_aubio_tempo(m_tempo);
+            m_tempo = nullptr;
+        }
+        if (m_outputBuf != nullptr) {
+            del_fvec(m_outputBuf);
+            m_outputBuf = nullptr;
+        }
+        if (m_inputBuf != nullptr) {
+            del_fvec(m_inputBuf);
+            m_inputBuf = nullptr;
+        }
+    }
+}
+
+BeatDetector::~BeatDetector()
+{
+    if (m_tempo != nullptr) {
+        del_aubio_tempo(m_tempo);
+        m_tempo = nullptr;
+    }
+    if (m_inputBuf != nullptr) {
+        del_fvec(m_inputBuf);
+        m_inputBuf = nullptr;
+    }
+    if (m_outputBuf != nullptr) {
+        del_fvec(m_outputBuf);
+        m_outputBuf = nullptr;
+    }
 }
 
 void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
 {
+    if (m_tempo == nullptr || m_inputBuf == nullptr || m_outputBuf == nullptr) {
+        return;
+    }
     if (!buffer.isValid() || buffer.frameCount() <= 0) {
         return;
     }
 
-    QVector<float> samples;
-    if (!decodeInterleavedFloats(buffer, &samples)) {
+    QVector<float> chunk;
+    if (!bufferToMonoFloatSamples(buffer, &chunk)) {
         return;
     }
 
-    float lowRms = 0.0f;
-    if (!computeDownsampledLowRms(samples, DOWNSAMPLE_STRIDE, &lowRms)) {
-        return;
+    m_pending += chunk;
+
+    const int hop = static_cast<int>(HOP_SIZE);
+    while (m_pending.size() >= hop) {
+        std::memcpy(
+            m_inputBuf->data,
+            m_pending.constData(),
+            static_cast<size_t>(hop) * sizeof(smpl_t));
+
+        aubio_tempo_do(m_tempo, m_inputBuf, m_outputBuf);
+
+        if (m_outputBuf->data[0] != static_cast<smpl_t>(0)) {
+            qDebug() << "[aubio] beat! BPM=" << aubio_tempo_get_bpm(m_tempo);
+            emit beatDetected();
+        }
+
+        m_pending.remove(0, hop);
     }
-
-    if (!m_hasPrevLowRms) {
-        m_prevLowRms = lowRms;
-        m_hasPrevLowRms = true;
-        return;
-    }
-
-    float diff = lowRms - m_prevLowRms;
-
-    qDebug() << "[Beat] lowRms=" << lowRms
-             << "diff=" << diff
-             << "prevLowRms=" << m_prevLowRms;
-
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    if (diff > DIFF_THRESHOLD && (now - m_lastBeatTime) > static_cast<qint64>(MIN_INTERVAL_MS)) {
-        m_lastBeatTime = now;
-        emit beatDetected();
-    }
-
-    m_prevLowRms = lowRms;
 }

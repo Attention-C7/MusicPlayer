@@ -13,7 +13,7 @@
 #include <QAudioBufferOutput> //Qt 6.8+：从 QMediaPlayer 取解码 PCM（FFmpeg 后端）
 #endif
 
-#include "beatdetector.h" //BeatDetector：由 QAudioBufferOutput（Qt6.8+）喂 PCM，做 RMS onset 检测
+#include "beatdetector.h" //BeatDetector：QAudioBufferOutput（Qt6.8+）喂 PCM，aubio_tempo 节拍跟踪
 #include "lrcparser.h" //歌词解析器，用于解析歌词文件，生成歌词时间戳→文本映射。
 #include "songinfo.h" //歌曲信息，用于存储歌曲元数据：标题、艺人、专辑、时长等。单曲元数据；setSearchContext 用 QList<SongInfo> 等。
 

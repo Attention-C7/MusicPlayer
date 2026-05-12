@@ -13,6 +13,7 @@ find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia Network)
 find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia Network)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(TAGLIB REQUIRED taglib)
+pkg_check_modules(AUBIO REQUIRED aubio)
 
 set(PROJECT_SOURCES
         main.cpp
@@ -85,11 +86,13 @@ target_link_libraries(MusicPlayer PRIVATE
     Qt${QT_VERSION_MAJOR}::Multimedia
     Qt${QT_VERSION_MAJOR}::Network
     ${TAGLIB_LIBRARIES}
+    ${AUBIO_LIBRARIES}
 )
 
 target_include_directories(MusicPlayer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${TAGLIB_INCLUDE_DIRS}
+    ${AUBIO_INCLUDE_DIRS}
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
