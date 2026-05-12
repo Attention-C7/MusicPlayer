@@ -58,15 +58,15 @@ void setDefaultPinkTheme(QColor *gradTop, QColor *gradBottom, QColor *themeColor
 void gradientFromAverage(const QColor &avg, QColor *gradTop, QColor *gradBottom, QColor *themeColor)
 {
     *themeColor = avg;
-    qreal h = 0.0;
-    qreal s = 0.0;
-    qreal l = 0.5;
-    qreal a = 1.0;
+    float h = 0.0f;
+    float s = 0.0f;
+    float l = 0.5f;
+    float a = 1.0f;
     avg.getHslF(&h, &s, &l, &a);
-    const qreal sTop = qBound(0.0, s * 0.42, 1.0);
-    const qreal lTop = qBound(0.78, l + 0.14, 0.97);
-    const qreal sBot = qBound(0.0, s * 0.55, 1.0);
-    const qreal lBot = qBound(0.52, l - 0.08, 0.90);
+    const float sTop = qBound(0.0f, s * 0.42f, 1.0f);
+    const float lTop = qBound(0.78f, l + 0.14f, 0.97f);
+    const float sBot = qBound(0.0f, s * 0.55f, 1.0f);
+    const float lBot = qBound(0.52f, l - 0.08f, 0.90f);
     *gradTop = QColor::fromHslF(h, sTop, lTop, a);
     *gradBottom = QColor::fromHslF(h, sBot, lBot, a);
 }
