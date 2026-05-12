@@ -46,6 +46,8 @@ set(PROJECT_SOURCES
         listwidget.cpp
         listwidget.h
         listwidget.ui
+        beatdetector.cpp
+        beatdetector.h
         lrcparser.cpp
         lrcparser.h
         lyriclinerow.cpp

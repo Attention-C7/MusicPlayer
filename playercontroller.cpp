@@ -50,6 +50,25 @@ PlayerController::PlayerController(QObject *parent)
     });
 
     setVolumePercent(50);
+
+    // 节拍检测链：放在构造末尾，避免与上方播放器初始化顺序纠缠；父对象均为 this，随控制器析构。
+    m_beatDetector = new BeatDetector(this);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    m_audioBufferOutput = new QAudioBufferOutput(this);
+    m_player->setAudioBufferOutput(m_audioBufferOutput);
+    connect(
+        m_audioBufferOutput,
+        &QAudioBufferOutput::audioBufferReceived,
+        m_beatDetector,
+        &BeatDetector::feedBuffer,
+        Qt::QueuedConnection);
+#endif
+}
+
+/** UI 等可 connect(controller->beatDetector(), &BeatDetector::beatDetected, …)。 */
+BeatDetector *PlayerController::beatDetector() const
+{
+    return m_beatDetector;
 }
 
 void PlayerController::setPlaylist(QList<SongInfo> songs)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QtGlobal>
+
 #include <QObject>  //控制器是非界面QObject，挂对象树、发信号、内部连QMediaPlayer
 #include <QAudioOutput> //Qt6 播放链路里 QMediaPlayer + QAudioOutput，头文件里成员指针需要完整类型（或前向声明 + 实现文件包含）
 #include <QList> //歌曲列表，QList<SongInfo> 与 ListWidget 共享数据模型。
@@ -7,6 +9,11 @@
 #include <QPixmap> //像素图，用于显示图像：封面与背景
 #include <QTimer> //定时器，用于实现定时功能：seek定时、长按检测等
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+#include <QAudioBufferOutput> //Qt 6.8+：从 QMediaPlayer 取解码 PCM（FFmpeg 后端）
+#endif
+
+#include "beatdetector.h" //BeatDetector：由 QAudioBufferOutput（Qt6.8+）喂 PCM，做 RMS onset 检测
 #include "lrcparser.h" //歌词解析器，用于解析歌词文件，生成歌词时间戳→文本映射。
 #include "songinfo.h" //歌曲信息，用于存储歌曲元数据：标题、艺人、专辑、时长等。单曲元数据；setSearchContext 用 QList<SongInfo> 等。
 
@@ -40,6 +47,8 @@ public:
     bool isMuted() const; //界面静音状态（与音量为 0 不同：语音设 0 不一定视为静音）
     void setMuted(bool muted); //静音：输出 0 并记忆上次音量；取消则恢复
     int volumePercentBeforeMute() const; //静音前记忆的还原音量（用于取消静音前听力提示）
+    /** 节拍检测器指针（构造末尾创建）；Qt 6.8+ 时另有 PCM 缓冲输出接入 feedBuffer。 */
+    BeatDetector *beatDetector() const;
     void setPlayMode(PlayMode mode); //设置播放模式,设置 SingleLoop / FolderLoop / AllLoop / RandomPlay，变化时 emit playModeChanged
     int currentIndex() const; //当前曲目在全量表中的索引（与 m_ctx.globalIndex 一致，由 playByIndex / setContext 维护）
     int currentScopeIndex() const; //当前曲目在 m_ctx.scopeList 中的索引（界面「第几首」）
@@ -81,6 +90,12 @@ private:
 
     QMediaPlayer *m_player; //Qt多媒体框架里的核心类，负责媒体文件的播放、暂停、停止、seek等操作。
     QAudioOutput *m_audioOutput; //Qt6 播放链路里 QMediaPlayer + QAudioOutput，头文件里成员指针需要完整类型（或前向声明 + 实现文件包含）
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    /** Qt 6.8+：挂到 QMediaPlayer::setAudioBufferOutput，收解码 PCM（audioBufferReceived）。 */
+    QAudioBufferOutput *m_audioBufferOutput = nullptr;
+#endif
+    /** RMS 节拍检测；在构造函数末尾 new，父对象为 this。 */
+    BeatDetector *m_beatDetector = nullptr;
     QList<SongInfo> m_playlist; //全量播放列表；唯一媒体索引 m_currentIndex / m_ctx.globalIndex 指向此表
     PlayContext m_ctx;           //当前播放上下文（范围列表 + 范围内下标 + 全量下标）
     int m_currentIndex;          //当前曲目在全量表中的索引（冗余自 m_ctx.globalIndex，与 durationChanged 等lambda捕获一致）

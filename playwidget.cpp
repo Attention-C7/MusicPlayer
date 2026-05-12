@@ -62,7 +62,7 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
 
-    m_beatTimer->setInterval(500);
+    m_beatTimer->setInterval(2000); // 与 start/stopBeatEffect 一致：兜底周期 2s
     m_beatTimer->setSingleShot(false);
     m_beatAnim->setDuration(200);
     m_beatAnim->setStartValue(0.15f);
@@ -152,18 +152,6 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
 
     connect(m_controller, &PlayerController::playModeChanged, this, [this](PlayMode mode) {
         setPlayModeIcon(mode);
-        switch (mode) {
-        case PlayMode::RandomPlay:
-            m_beatTimer->setInterval(400);
-            break;
-        case PlayMode::SingleLoop:
-            m_beatTimer->setInterval(600);
-            break;
-        case PlayMode::FolderLoop:
-        case PlayMode::AllLoop:
-            m_beatTimer->setInterval(500);
-            break;
-        }
     });
 
     connect(m_controller, &PlayerController::currentIndexChanged, this, [this](int) {
@@ -315,6 +303,15 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     onSessionPlaybackActiveChanged(m_controller->sessionPlaybackActive());
     onControllerPlaybackStateChanged(m_controller->playbackState());
 
+    // 解码 RMS 节拍 → 与定时器兜底共用 onBeat（定时器在 startBeatEffect 里设为 2s）
+    if (m_controller->beatDetector() != nullptr) {
+        connect(
+            m_controller->beatDetector(),
+            &BeatDetector::beatDetected,
+            this,
+            &PlayWidget::onBeat);
+    }
+
     for (QWidget *w : findChildren<QWidget*>()) {
         w->setAutoFillBackground(false);
     }
@@ -344,6 +341,7 @@ void PlayWidget::startBeatEffect()
     if (!m_beatEffect) {
         return;
     }
+    m_beatTimer->setInterval(2000); // 仅作兜底：约 2s 无 beatDetected 时由定时器触发一次 onBeat
     if (!m_beatTimer->isActive()) {
         m_beatTimer->start();
     }
@@ -351,6 +349,7 @@ void PlayWidget::startBeatEffect()
 
 void PlayWidget::stopBeatEffect()
 {
+    m_beatTimer->setInterval(2000); // 停止时也保持周期，避免静音/停播后间隔被改乱导致异常闪烁
     m_beatTimer->stop();
     m_beatAnim->stop();
     m_overlayAlpha = 0.0f;

@@ -72,9 +72,9 @@ private:
     void clearLrcLabels();
     void updateBackground(const QPixmap &pixmap);  //背景图模糊处理：传入封面 QPixmap，生成模糊背景图，供绘制使用。
     void updateIndexLabel();  //索引标签更新：根据播放状态（playing/paused）更新索引标签文本。
-    void startBeatEffect();  //节拍效果启动：如果节拍效果已启用，启动节拍定时器。
-    void stopBeatEffect();  //节拍效果停止：停止节拍定时器，重置 overlayAlpha 为 0。
-    void onBeat();  //节拍定时：每 500ms 调用一次，更新 overlayAlpha 为 0.15f，触发动画。
+    void startBeatEffect();  //节拍开：设定时器 2s 兜底并启动；真实节拍主要来自 BeatDetector::beatDetected→onBeat。
+    void stopBeatEffect();  //节拍关：定时器设回 2s 间隔后 stop，清 overlay，避免静音期乱闪。
+    void onBeat();  //节拍脉冲：BeatDetector::beatDetected 与定时器兜底（2s）共用；更新 overlayAlpha 动画。
     void setBeatEnabled(bool enabled);  //节拍效果开关：根据 enabled 更新按钮样式，并决定是否启动节拍定时器。
     float overlayAlpha() const;  //获取 overlayAlpha 属性值。与 Q_PROPERTY 配套的 READ/WRITE，供动画和绘制读取。
     void setOverlayAlpha(float alpha);  //设置 overlayAlpha 属性值，并触发更新。
@@ -97,7 +97,7 @@ private:
     QList<SongInfo> m_allSongs;  //与 setSearchContext 参数对应的缓存，供语音部件检索。
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;
-    QTimer *m_beatTimer;    //周期性触发节拍 UI（与 onBeat 连接）。
+    QTimer *m_beatTimer;    //2s 周期兜底，无 beatDetected 时仍偶发脉冲；与 BeatDetector 信号互补。
     bool m_beatEffect;  //节拍效果开关，决定是否启动节拍定时器。
     float m_overlayAlpha;  //overlayAlpha 属性值，用于动画和绘制。与 Q_PROPERTY 绑定的叠层透明度存储。
     QPropertyAnimation *m_beatAnim;  //节拍动画，用于实现 overlayAlpha 动画效果。
