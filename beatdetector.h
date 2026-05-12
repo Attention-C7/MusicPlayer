@@ -44,6 +44,13 @@ private:
 
     uint_t m_sampleRate = 0;
 
-    static constexpr uint_t HOP_SIZE = 256;
+    /** aubio 窗长（FFT）；须与 new_aubio_tempo 第二参一致。 */
     static constexpr uint_t WIN_SIZE = 2048;
+    /**
+     * 每 hop 样本数：须与 new_fvec(HOP_SIZE)、new_aubio_tempo 第三参 hop_size、feedBuffer 内写入帧长完全一致。
+     * 常见错误：new_fvec(512) 与 HOP_SIZE=256 混用 → 填充越界或 tempo 与缓冲错位。
+     */
+    static constexpr uint_t HOP_SIZE = 256;
+    static_assert(WIN_SIZE == 2048u);
+    static_assert(HOP_SIZE == 256u);
 };

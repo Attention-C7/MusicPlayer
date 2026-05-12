@@ -185,12 +185,29 @@ bool BeatDetector::ensureAnalysisEngine(int sampleRate)
 
     releaseAnalysisEngine();
 
-    /** default + 2048/256 与曾跑通配置一致；采样率用缓冲实际值（勿硬编码 44100，免 48k 等错位）。 */
-    m_inputBuf = new_fvec(HOP_SIZE);
-    m_outputBuf = new_fvec(2);
+    /** default；第二参 WIN_SIZE、第三参 HOP_SIZE 须与 new_fvec(HOP_SIZE) 及 feedBuffer 每帧长度同源。第四参为缓冲采样率 sr。 */
     m_aubioTempo = new_aubio_tempo("default", WIN_SIZE, HOP_SIZE, sr);
+    if (m_aubioTempo == nullptr) {
+        qDebug() << "[Beat] ERROR: aubio_tempo init FAILED"
+                 << "sr=" << static_cast<int>(sr);
+    } else {
+        qDebug() << "[Beat] aubio_tempo init OK"
+                 << "sr=" << static_cast<int>(sr);
+    }
 
-    if (m_inputBuf == nullptr || m_outputBuf == nullptr || m_aubioTempo == nullptr) {
+    m_inputBuf = new_fvec(HOP_SIZE);
+    if (m_inputBuf == nullptr) {
+        qDebug() << "[Beat] ERROR: inputBuf init FAILED";
+    } else {
+        qDebug() << "[Beat] inputBuf OK size=" << static_cast<int>(m_inputBuf->length);
+    }
+
+    m_outputBuf = new_fvec(2);
+    if (m_outputBuf == nullptr) {
+        qDebug() << "[Beat] ERROR: outputBuf init FAILED";
+    }
+
+    if (m_aubioTempo == nullptr || m_inputBuf == nullptr || m_outputBuf == nullptr) {
         releaseAnalysisEngine();
         return false;
     }
@@ -223,6 +240,9 @@ void BeatDetector::feedBuffer(const QAudioBuffer &buffer)
         for (int i = 0; i < hop; ++i) {
             m_inputBuf->data[i] = static_cast<smpl_t>(samples[i]);
         }
+
+        qDebug() << "[Beat] feeding chunk, inputBuf->length=" << static_cast<int>(m_inputBuf->length)
+                 << "pending size before=" << m_pending.size();
 
         aubio_tempo_do(m_aubioTempo, m_inputBuf, m_outputBuf);
 
