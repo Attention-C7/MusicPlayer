@@ -28,6 +28,7 @@
 #include <QSpacerItem>
 #include <QStyle>
 #include <QTimer>
+#include <QToolTip>
 #include <QVBoxLayout>
 
 PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent)
