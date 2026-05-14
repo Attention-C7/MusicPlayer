@@ -68,12 +68,12 @@ void LyricLineRow::setActiveLine(bool active)
 {
     if (active) {
         m_textLabel->setStyleSheet(QStringLiteral(
-            "color:#ffffff; font-size:15px; font-weight:bold; background:transparent;"));
-        m_timeLabel->setStyleSheet(QStringLiteral("color:#dddddd; background:transparent;"));
+            "color:#ffffff; font-size:18px; font-weight:bold; background:transparent;"));
+        m_timeLabel->setStyleSheet(QStringLiteral("color:#FF7043; background:transparent;"));
     } else {
         m_textLabel->setStyleSheet(QStringLiteral(
-            "color:#888888; font-size:13px; font-weight:normal; background:transparent;"));
-        m_timeLabel->setStyleSheet(QStringLiteral("color:#aaaaaa; background:transparent;"));
+            "color:#9696a8; font-size:14px; font-weight:normal; background:transparent;"));
+        m_timeLabel->setStyleSheet(QStringLiteral("color:#888888; background:transparent;"));
     }
 }
 

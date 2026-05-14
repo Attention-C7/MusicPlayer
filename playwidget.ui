@@ -102,12 +102,12 @@
         </widget>
        </item>
        <item>
-        <widget class="QScrollArea" name="scrollArea_lrc">
+        <widget class="LyricScrollArea" name="scrollArea_lrc">
          <property name="frameShape">
           <enum>QFrame::NoFrame</enum>
          </property>
          <property name="verticalScrollBarPolicy">
-          <enum>Qt::ScrollBarAsNeeded</enum>
+          <enum>Qt::ScrollBarAlwaysOff</enum>
          </property>
          <property name="horizontalScrollBarPolicy">
           <enum>Qt::ScrollBarAlwaysOff</enum>
@@ -126,7 +126,7 @@
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_lrc">
            <property name="spacing">
-            <number>6</number>
+            <number>10</number>
            </property>
            <property name="leftMargin">
             <number>0</number>
@@ -158,7 +158,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QSlider" name="slider_progress">
+      <widget class="PlayProgressSlider" name="slider_progress">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
@@ -281,6 +281,16 @@
    <class>TurntableAlbumWidget</class>
    <extends>QWidget</extends>
    <header>turntablealbumwidget.h</header>
+  </customwidget>
+  <customwidget>
+   <class>LyricScrollArea</class>
+   <extends>QScrollArea</extends>
+   <header>lyricscrollarea.h</header>
+  </customwidget>
+  <customwidget>
+   <class>PlayProgressSlider</class>
+   <extends>QSlider</extends>
+   <header>playprogressslider.h</header>
   </customwidget>
  </customwidgets>
  <resources/>

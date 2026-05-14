@@ -8,6 +8,7 @@
 #include <algorithm>
 
 #include <QCoreApplication>
+#include <QEasingCurve>
 #include <QEvent>
 #include <QFileInfo>
 #include <QFrame>
@@ -17,6 +18,7 @@
 #include <QMouseEvent>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPropertyAnimation>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScrollBar>
@@ -46,8 +48,12 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_sliderVolume(nullptr)
     , m_lblVolumePercent(nullptr)
     , m_btnVolumeMute(nullptr)
+    , m_lrcScrollAnim(nullptr)
 {
     ui->setupUi(this);
+    m_lrcScrollAnim = new QPropertyAnimation(ui->scrollArea_lrc->verticalScrollBar(), QByteArrayLiteral("value"), this);
+    m_lrcScrollAnim->setDuration(220);
+    m_lrcScrollAnim->setEasingCurve(QEasingCurve::OutCubic);
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(false);
     m_voiceWidget = new VoiceInputWidget(
@@ -199,6 +205,7 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
         clearLrcLabels();
         if (!m_lrcMap.isEmpty()) {
             buildLrcLabels();
+            updateLrcDisplay(static_cast<qint64>(ui->slider_progress->value()));
         }
         updateBeatLyricButtonState();
     });
@@ -656,6 +663,8 @@ PlayWidget::~PlayWidget()
     if (QCoreApplication::instance() != nullptr) {
         QCoreApplication::instance()->removeEventFilter(this);
     }
+    delete m_lrcScrollAnim;
+    m_lrcScrollAnim = nullptr;
     delete ui;
 }
 
@@ -730,7 +739,12 @@ void PlayWidget::updateLrcDisplay(qint64 position)
 
     const int centerY = current->y() + (current->height() / 2);
     const int viewportHalf = ui->scrollArea_lrc->viewport()->height() / 2;
-    ui->scrollArea_lrc->verticalScrollBar()->setValue(centerY - viewportHalf);
+    QScrollBar *vbar = ui->scrollArea_lrc->verticalScrollBar();
+    const int target = qBound(0, centerY - viewportHalf, vbar->maximum());
+    m_lrcScrollAnim->stop();
+    m_lrcScrollAnim->setStartValue(vbar->value());
+    m_lrcScrollAnim->setEndValue(target);
+    m_lrcScrollAnim->start();
 
     emit lyricCurrentLineChanged(m_currentLrcIndex, m_lrcMap.value(m_lrcTimesMs[m_currentLrcIndex]));
 }
@@ -753,6 +767,9 @@ void PlayWidget::buildLrcLabels()
 
 void PlayWidget::clearLrcLabels()
 {
+    if (m_lrcScrollAnim != nullptr) {
+        m_lrcScrollAnim->stop();
+    }
     QVBoxLayout *layout = ui->verticalLayout_lrc;
     while (layout->count() > 0) {
         QLayoutItem *item = layout->takeAt(0);

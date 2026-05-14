@@ -21,6 +21,10 @@ int main(int argc, char *argv[])    //标准C++入口：argc/argv交给Qt解析
         background-color: transparent;
     }
 
+    PlayProgressSlider {
+        background-color: transparent;
+    }
+
     QLabel#lbl_title {
         font-size: 26px;
         font-weight: bold;
@@ -47,25 +51,6 @@ int main(int argc, char *argv[])    //标准C++入口：argc/argv交给Qt解析
         border-radius: 12px;
         font-size: 48px;
         color: #444466;
-    }
-
-    QSlider#slider_progress::groove:horizontal {
-        height: 3px;
-        background: #333355;
-        border-radius: 2px;
-    }
-
-    QSlider#slider_progress::sub-page:horizontal {
-        background: #ff6900;
-        border-radius: 2px;
-    }
-
-    QSlider#slider_progress::handle:horizontal {
-        width: 12px;
-        height: 12px;
-        margin: -4px 0;
-        border-radius: 6px;
-        background: #ff6900;
     }
 
     QLabel#lbl_currentTime, QLabel#lbl_totalTime {

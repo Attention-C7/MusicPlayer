@@ -9,6 +9,7 @@
 
 class QEvent;
 class QResizeEvent;
+class QPropertyAnimation;
 
 class QFrame;
 class QSlider;
@@ -105,4 +106,5 @@ private:
     QSlider *m_sliderVolume;  //垂直音量条 0–100
     QLabel *m_lblVolumePercent;  //例如 50%
     QPushButton *m_btnVolumeMute;  //浮层底部静音切换
+    QPropertyAnimation *m_lrcScrollAnim;  //歌词区垂直滚动平滑动画（隐藏滚动条时仍操作 QScrollBar）
 };

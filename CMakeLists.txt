@@ -55,6 +55,10 @@ set(PROJECT_SOURCES
         lrcparser.h
         lyriclinerow.cpp
         lyriclinerow.h
+        lyricscrollarea.cpp
+        lyricscrollarea.h
+        playprogressslider.cpp
+        playprogressslider.h
         filescanworker.cpp
         filescanworker.h
         resources.qrc
