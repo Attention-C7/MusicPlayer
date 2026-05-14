@@ -1,52 +1,117 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>VoiceInputWidget</class>
- <widget class="QWidget" name="VoiceInputWidget">
+ <widget class="VoiceInputWidget" name="VoiceInputWidget">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>760</width>
-    <height>110</height>
+    <width>800</width>
+    <height>360</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>VoiceInputWidget</string>
   </property>
-  <layout class="QVBoxLayout" name="verticalLayout_main">
+  <layout class="QVBoxLayout" name="verticalLayout_root">
    <property name="spacing">
-    <number>6</number>
+    <number>8</number>
    </property>
    <property name="leftMargin">
-    <number>0</number>
+    <number>10</number>
    </property>
    <property name="topMargin">
-    <number>0</number>
+    <number>8</number>
    </property>
    <property name="rightMargin">
-    <number>0</number>
+    <number>10</number>
    </property>
    <property name="bottomMargin">
-    <number>0</number>
+    <number>10</number>
    </property>
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout_toggle">
+    <widget class="QPushButton" name="btn_toggle">
+     <property name="text">
+      <string>▲ 语音与指令</string>
+     </property>
+     <property name="minimumHeight">
+      <number>36</number>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QListWidget" name="list_chat">
+     <property name="frameShape">
+      <enum>QFrame::NoFrame</enum>
+     </property>
+     <property name="horizontalScrollBarPolicy">
+      <enum>Qt::ScrollBarAlwaysOff</enum>
+     </property>
+     <property name="verticalScrollBarPolicy">
+      <enum>Qt::ScrollBarAsNeeded</enum>
+     </property>
+     <property name="spacing">
+      <number>4</number>
+     </property>
+     <property name="uniformItemSizes">
+      <bool>false</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="lbl_hint">
+     <property name="text">
+      <string>试试说：下一首、暂停、随机播放；或输入自然语言指令。</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_pills">
+     <property name="spacing">
+      <number>8</number>
+     </property>
      <item>
-      <widget class="QPushButton" name="btn_toggle">
+      <widget class="QPushButton" name="btn_pill_next">
        <property name="text">
-        <string>🎤 语音/文字控制</string>
+        <string>下一首</string>
+       </property>
+       <property name="minimumHeight">
+        <number>30</number>
        </property>
       </widget>
      </item>
      <item>
-      <spacer name="horizontalSpacer_toggle">
+      <widget class="QPushButton" name="btn_pill_pause">
+       <property name="text">
+        <string>暂停</string>
+       </property>
+       <property name="minimumHeight">
+        <number>30</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="btn_pill_shuffle">
+       <property name="text">
+        <string>随机</string>
+       </property>
+       <property name="minimumHeight">
+        <number>30</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_pills">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>
        </property>
        <property name="sizeHint" stdset="0">
         <size>
-         <width>40</width>
-         <height>20</height>
+         <width>20</width>
+         <height>10</height>
         </size>
        </property>
       </spacer>
@@ -54,69 +119,50 @@
     </layout>
    </item>
    <item>
-    <widget class="QWidget" name="panel_input">
-     <property name="maximumSize">
-      <size>
-       <width>16777215</width>
-       <height>0</height>
-      </size>
+    <layout class="QHBoxLayout" name="horizontalLayout_input">
+     <property name="spacing">
+      <number>8</number>
      </property>
-     <layout class="QVBoxLayout" name="verticalLayout_panel">
-      <property name="leftMargin">
-       <number>0</number>
-      </property>
-      <property name="topMargin">
-       <number>0</number>
-      </property>
-      <property name="rightMargin">
-       <number>0</number>
-      </property>
-      <property name="bottomMargin">
-       <number>0</number>
-      </property>
-      <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_input">
-        <item>
-         <widget class="QLineEdit" name="lineEdit_input">
-          <property name="placeholderText">
-           <string>输入指令，如：下一首、随机播放...</string>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="btn_send">
-          <property name="text">
-           <string>发送</string>
-          </property>
-         </widget>
-        </item>
-       </layout>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbl_hint">
-        <property name="text">
-         <string>当前为文字模式，语音录入需接入麦克风SDK</string>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">color: #888888; font-size: 12px;</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QLabel" name="lbl_result">
-        <property name="text">
-         <string/>
-        </property>
-        <property name="styleSheet">
-         <string notr="true">color: #888888; font-size: 12px;</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </widget>
+     <item>
+      <widget class="QLineEdit" name="lineEdit_input">
+       <property name="placeholderText">
+        <string>输入指令，回车或点发送…</string>
+       </property>
+       <property name="minimumHeight">
+        <number>36</number>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QToolButton" name="btn_send">
+       <property name="minimumSize">
+        <size>
+         <width>40</width>
+         <height>36</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>40</width>
+         <height>36</height>
+        </size>
+       </property>
+       <property name="toolTip">
+        <string>发送</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>VoiceInputWidget</class>
+   <extends>QWidget</extends>
+   <header>voiceinputwidget.h</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

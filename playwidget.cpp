@@ -60,9 +60,9 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
         m_aiController, m_controller,
         m_allSongs, m_artistMap, m_albumMap, this
     );
-    if (ui->verticalLayout_main != nullptr) {
-        ui->verticalLayout_main->addWidget(m_voiceWidget);
-    }
+    m_voiceWidget->setParent(this);
+    m_voiceWidget->raise();
+    m_voiceWidget->applyDrawerGeometry(width(), height());
 
     m_longPressTimer->setSingleShot(true);
     m_longPressTimer->setInterval(500);
@@ -635,6 +635,10 @@ void PlayWidget::onControllerVolumePercentChanged(int percent)
 void PlayWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    if (m_voiceWidget != nullptr) {
+        m_voiceWidget->applyDrawerGeometry(event->size().width(), event->size().height());
+        m_voiceWidget->raise();
+    }
     if (m_volumePopup != nullptr && m_volumePopup->isVisible()) {
         repositionVolumePopup();
     }

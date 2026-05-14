@@ -57,8 +57,12 @@ set(PROJECT_SOURCES
         lyriclinerow.h
         lyricscrollarea.cpp
         lyricscrollarea.h
+        micoverlaywidget.cpp
+        micoverlaywidget.h
         playprogressslider.cpp
         playprogressslider.h
+        voicechatdelegate.cpp
+        voicechatdelegate.h
         filescanworker.cpp
         filescanworker.h
         resources.qrc

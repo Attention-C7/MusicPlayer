@@ -1,8 +1,62 @@
 #include "voiceinputwidget.h"
 #include "ui_voiceinputwidget.h"
 
-#include <QFileInfo>
+#include "micoverlaywidget.h"
+#include "voicechatdelegate.h"
+
+#include <QAbstractAnimation>
+#include <QAbstractItemView>
+#include <QAbstractItemModel>
+#include <QAbstractButton>
+#include <QEasingCurve>
+#include "commanddispatcher.h"
+#include <QIcon>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <QPainter>
+#include <QPixmap>
 #include <QPropertyAnimation>
+#include <QPushButton>
+#include <QResizeEvent>
+#include <QStyleOptionViewItem>
+#include <QToolButton>
+
+namespace {
+
+constexpr int kDrawerOpenHeight = 320;
+constexpr int kDrawerClosedHeight = 52;
+constexpr int kDrawerAnimMs = 280;
+
+} // namespace
+
+static QIcon makeSendIconImpl()
+{
+    const int s = 24;
+    QPixmap pm(s, s);
+    pm.fill(Qt::transparent);
+    QPainter painter(&pm);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setPen(QPen(QColor("#FF7043"), 2.2, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    painter.setBrush(QColor("#FF7043"));
+    QPainterPath plane;
+    plane.moveTo(3.0, 12.0);
+    plane.lineTo(20.0, 5.5);
+    plane.lineTo(10.5, 12.0);
+    plane.lineTo(20.0, 18.5);
+    plane.closeSubpath();
+    painter.drawPath(plane);
+    painter.setBrush(QColor(255, 255, 255, 220));
+    painter.setPen(Qt::NoPen);
+    painter.drawEllipse(QPointF(8.5, 12.0), 2.0, 2.0);
+    return QIcon(pm);
+}
+
+QIcon VoiceInputWidget::makeSendIcon()
+{
+    static const QIcon icon = makeSendIconImpl();
+    return icon;
+}
 
 VoiceInputWidget::VoiceInputWidget(
     AiController *aiController,
@@ -16,29 +70,113 @@ VoiceInputWidget::VoiceInputWidget(
     , ui(new Ui::VoiceInputWidget)
     , m_aiController(aiController)
     , m_playerController(playerController)
-    , m_animation(new QPropertyAnimation(this))
-    , m_expanded(false)
-    , m_allSongs(allSongs)
-    , m_artistMap(artistMap)
-    , m_albumMap(albumMap)
+    , m_chatDelegate(nullptr)
+    , m_micOverlay(nullptr)
+    , m_drawerGeomAnim(new QPropertyAnimation(this, QByteArrayLiteral("geometry"), this))
+    , m_drawerOpen(false)
+    , m_playW(800)
+    , m_playH(500)
+    , m_allSongs(std::move(allSongs))
+    , m_artistMap(std::move(artistMap))
+    , m_albumMap(std::move(albumMap))
 {
     ui->setupUi(this);
+    setObjectName(QStringLiteral("VoiceInputWidgetRoot"));
 
-    ui->panel_input->setMaximumHeight(0);
-    ui->btn_toggle->setText(QStringLiteral("语音/文字控制"));
-    ui->lbl_hint->setText(QStringLiteral("当前为文字模式，语音录入需接入麦克风SDK"));
-    ui->lbl_result->setText(QString());
+    m_chatDelegate = new VoiceChatDelegate(ui->list_chat);
+    ui->list_chat->setItemDelegate(m_chatDelegate);
+    ui->list_chat->setSelectionMode(QAbstractItemView::NoSelection);
+    ui->list_chat->setFocusPolicy(Qt::NoFocus);
+    ui->list_chat->setSpacing(2);
+    ui->list_chat->setStyleSheet(QStringLiteral(
+        "QListWidget { background: transparent; color: #e8e8ef; border: none; }"
+        "QListWidget::item { background: transparent; border: none; padding: 0; }"));
+
+    ui->lbl_hint->setStyleSheet(QStringLiteral(
+        "color: #8888a0; font-size: 12px; background: transparent;"));
+
+    const QString pillStyle = QStringLiteral(
+        "QPushButton {"
+        "background-color: #333355;"
+        "color: #dddddd;"
+        "border: 1px solid #444466;"
+        "border-radius: 14px;"
+        "padding: 4px 14px;"
+        "font-size: 13px;"
+        "}"
+        "QPushButton:hover {"
+        "background-color: #3d3d5a;"
+        "color: #FF7043;"
+        "border-color: #FF7043;"
+        "}"
+        "QPushButton:pressed { background-color: #2a2a40; }");
+    ui->btn_pill_next->setStyleSheet(pillStyle);
+    ui->btn_pill_pause->setStyleSheet(pillStyle);
+    ui->btn_pill_shuffle->setStyleSheet(pillStyle);
+    ui->btn_pill_next->setCursor(Qt::PointingHandCursor);
+    ui->btn_pill_pause->setCursor(Qt::PointingHandCursor);
+    ui->btn_pill_shuffle->setCursor(Qt::PointingHandCursor);
+
+    ui->lineEdit_input->setStyleSheet(QStringLiteral(
+        "QLineEdit {"
+        "background-color: #2a2a3e;"
+        "border: 1px solid #444466;"
+        "border-radius: 10px;"
+        "padding: 6px 12px;"
+        "color: #f0f0f5;"
+        "font-size: 14px;"
+        "}"));
+
+    auto *sendBtn = qobject_cast<QToolButton *>(ui->btn_send);
+    if (sendBtn != nullptr) {
+        sendBtn->setIcon(makeSendIcon());
+        sendBtn->setIconSize(QSize(22, 22));
+        sendBtn->setAutoRaise(true);
+        sendBtn->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        sendBtn->setStyleSheet(QStringLiteral(
+            "QToolButton { background: transparent; border: none; border-radius: 8px; padding: 4px; }"
+            "QToolButton:hover { background-color: rgba(255,112,67,0.18); }"
+            "QToolButton:pressed { background-color: rgba(255,112,67,0.28); }"));
+        sendBtn->setCursor(Qt::PointingHandCursor);
+    }
+
+    ui->btn_toggle->setStyleSheet(QStringLiteral(
+        "QPushButton {"
+        "text-align: left;"
+        "padding: 8px 12px;"
+        "background-color: #2a2a3e;"
+        "color: #e8e8ef;"
+        "border: 1px solid #3a3a55;"
+        "border-radius: 10px;"
+        "font-size: 14px;"
+        "}"
+        "QPushButton:hover { background-color: #333355; color: #FF7043; border-color: #FF7043; }"));
+
+    setStyleSheet(QStringLiteral(
+        "#VoiceInputWidgetRoot {"
+        "background-color: rgba(26,26,46,248);"
+        "border-top: 1px solid #3a3a55;"
+        "border-top-left-radius: 16px;"
+        "border-top-right-radius: 16px;"
+        "}"));
+
+    m_micOverlay = new MicOverlayWidget(this);
+    m_micOverlay->hide();
+
+    m_drawerGeomAnim->setDuration(kDrawerAnimMs);
+    m_drawerGeomAnim->setEasingCurve(QEasingCurve::OutCubic);
+    connect(m_drawerGeomAnim, &QPropertyAnimation::finished, this, &VoiceInputWidget::updateMicOverlayGeometry);
+
     if (m_aiController != nullptr) {
         m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
     }
 
-    m_animation->setTargetObject(ui->panel_input);
-    m_animation->setPropertyName("maximumHeight");
-    m_animation->setDuration(220);
-
-    connect(ui->btn_toggle, &QPushButton::clicked, this, &VoiceInputWidget::toggleExpanded);
-
-    connect(ui->btn_send, &QPushButton::clicked, this, &VoiceInputWidget::onSendClicked);
+    connect(ui->btn_toggle, &QPushButton::clicked, this, &VoiceInputWidget::onToggleDrawerClicked);
+    connect(ui->btn_send, &QAbstractButton::clicked, this, &VoiceInputWidget::onSendClicked);
+    connect(ui->lineEdit_input, &QLineEdit::returnPressed, this, &VoiceInputWidget::onSendClicked);
+    connect(ui->btn_pill_next, &QPushButton::clicked, this, &VoiceInputWidget::onPillNextClicked);
+    connect(ui->btn_pill_pause, &QPushButton::clicked, this, &VoiceInputWidget::onPillPauseClicked);
+    connect(ui->btn_pill_shuffle, &QPushButton::clicked, this, &VoiceInputWidget::onPillShuffleClicked);
 
     if (m_aiController != nullptr) {
         connect(m_aiController, &AiController::recognizing, this, &VoiceInputWidget::onRecognizing);
@@ -48,18 +186,13 @@ VoiceInputWidget::VoiceInputWidget(
             connect(dispatcher, &CommandDispatcher::dispatchResult, this, &VoiceInputWidget::onDispatchResult);
         }
     }
-    //connect(m_aiController, &AiController::commandReady, this, &VoiceInputWidget::handleCommand);
-    /*connect(m_aiController, &AiController::recognizeFailed, this, [this](const QString &error) {
-        if (error.contains(QStringLiteral("未能及时响应"))) {
-            ui->lbl_result->setText(QStringLiteral("未能及时响应，已尝试本地处理"));
-            return;
-        }
-        if (error.contains(QStringLiteral("超时"))) {
-            ui->lbl_result->setText(QStringLiteral("网络超时，请重试"));
-            return;
-        }
-        ui->lbl_result->setText(QStringLiteral("网络错误：") + error);
-    });*/
+
+    appendChatMessage(
+        false,
+        QStringLiteral("你好，可以用文字或下方快捷指令控制播放；展开后可查看对话记录。"));
+    (void)m_playerController;
+
+    setConversationVisible(false);
 }
 
 VoiceInputWidget::~VoiceInputWidget()
@@ -73,12 +206,100 @@ void VoiceInputWidget::setSearchContext(
     QMap<QString, QList<SongInfo>> albumMap
 )
 {
-    m_allSongs = allSongs;
-    m_artistMap = artistMap;
-    m_albumMap = albumMap;
+    m_allSongs = std::move(allSongs);
+    m_artistMap = std::move(artistMap);
+    m_albumMap = std::move(albumMap);
     if (m_aiController != nullptr) {
         m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
     }
+}
+
+void VoiceInputWidget::applyDrawerGeometry(int playWidgetWidth, int playWidgetHeight)
+{
+    m_playW = qMax(1, playWidgetWidth);
+    m_playH = qMax(1, playWidgetHeight);
+    if (m_drawerGeomAnim->state() == QAbstractAnimation::Running) {
+        m_drawerGeomAnim->setEndValue(computeDrawerGeometry());
+    } else {
+        setGeometry(computeDrawerGeometry());
+    }
+    updateMicOverlayGeometry();
+}
+
+QRect VoiceInputWidget::computeDrawerGeometry() const
+{
+    const int h = m_drawerOpen ? kDrawerOpenHeight : kDrawerClosedHeight;
+    return QRect(0, m_playH - h, m_playW, h);
+}
+
+void VoiceInputWidget::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateMicOverlayGeometry();
+}
+
+void VoiceInputWidget::updateMicOverlayGeometry()
+{
+    if (m_micOverlay == nullptr) {
+        return;
+    }
+    if (m_micOverlay->isListening()) {
+        m_micOverlay->setGeometry(rect());
+    } else if (ui->list_chat != nullptr && ui->list_chat->isVisible()) {
+        m_micOverlay->setGeometry(ui->list_chat->geometry());
+    } else {
+        m_micOverlay->setGeometry(QRect());
+    }
+    m_micOverlay->raise();
+}
+
+void VoiceInputWidget::appendChatMessage(bool isUser, const QString &text)
+{
+    if (text.trimmed().isEmpty()) {
+        return;
+    }
+    auto *item = new QListWidgetItem();
+    item->setData(Qt::DisplayRole, text);
+    item->setData(Qt::UserRole, isUser);
+    item->setFlags(Qt::ItemIsEnabled);
+
+    ui->list_chat->addItem(item);
+
+    QStyleOptionViewItem opt;
+    opt.initFrom(ui->list_chat);
+    const int vw = qMax(220, ui->list_chat->viewport()->width());
+    opt.rect = QRect(0, 0, vw, 400);
+    opt.font = ui->list_chat->font();
+    const int row = ui->list_chat->count() - 1;
+    const QModelIndex idx = ui->list_chat->model()->index(row, 0);
+    item->setSizeHint(m_chatDelegate->sizeHint(opt, idx));
+
+    ui->list_chat->scrollToBottom();
+}
+
+void VoiceInputWidget::setConversationVisible(bool visible)
+{
+    ui->list_chat->setVisible(visible);
+    ui->lbl_hint->setVisible(visible);
+    ui->btn_pill_next->setVisible(visible);
+    ui->btn_pill_pause->setVisible(visible);
+    ui->btn_pill_shuffle->setVisible(visible);
+    ui->lineEdit_input->setVisible(visible);
+    ui->btn_send->setVisible(visible);
+}
+
+void VoiceInputWidget::onToggleDrawerClicked()
+{
+    m_drawerOpen = !m_drawerOpen;
+    setConversationVisible(m_drawerOpen);
+    ui->btn_toggle->setText(m_drawerOpen
+        ? QStringLiteral("▼ 收起语音与指令")
+        : QStringLiteral("▲ 语音与指令"));
+
+    m_drawerGeomAnim->stop();
+    m_drawerGeomAnim->setStartValue(geometry());
+    m_drawerGeomAnim->setEndValue(computeDrawerGeometry());
+    m_drawerGeomAnim->start();
 }
 
 void VoiceInputWidget::onSendClicked()
@@ -87,151 +308,57 @@ void VoiceInputWidget::onSendClicked()
     if (input.isEmpty()) {
         return;
     }
+    appendChatMessage(true, input);
+    ui->lineEdit_input->clear();
     if (m_aiController != nullptr) {
         m_aiController->recognize(input);
     }
 }
 
-void VoiceInputWidget::toggleExpanded()
+void VoiceInputWidget::onPillNextClicked()
 {
-    m_expanded = !m_expanded;
-    m_animation->stop();
-    m_animation->setStartValue(ui->panel_input->maximumHeight());
-    m_animation->setEndValue(m_expanded ? 80 : 0);
-    m_animation->start();
+    appendChatMessage(true, QStringLiteral("下一首"));
+    if (m_aiController != nullptr) {
+        m_aiController->recognize(QStringLiteral("下一首"));
+    }
 }
 
-void VoiceInputWidget::handleCommand(const QString &cmd, const QString &param)
+void VoiceInputWidget::onPillPauseClicked()
 {
-    if (m_playerController == nullptr) {
-        ui->lbl_result->setText(QStringLiteral("播放器未初始化"));
-        return;
+    appendChatMessage(true, QStringLiteral("暂停"));
+    if (m_aiController != nullptr) {
+        m_aiController->recognize(QStringLiteral("暂停"));
     }
-
-    if (cmd == QStringLiteral("play")) {
-        m_playerController->requestPlay();
-        ui->lbl_result->setText(QStringLiteral("已执行：播放"));
-        return;
-    }
-    if (cmd == QStringLiteral("pause")) {
-        m_playerController->requestPause();
-        ui->lbl_result->setText(QStringLiteral("已执行：暂停"));
-        return;
-    }
-
-    if (cmd == QStringLiteral("prev")) {
-        m_playerController->prev();
-        ui->lbl_result->setText(QStringLiteral("已切换：上一首"));
-        return;
-    }
-
-    if (cmd == QStringLiteral("next")) {
-        m_playerController->next();
-        ui->lbl_result->setText(QStringLiteral("已切换：下一首"));
-        return;
-    }
-
-    if (cmd == QStringLiteral("mode")) {
-        if (param == QStringLiteral("single")) {
-            m_playerController->setPlayMode(PlayMode::SingleLoop);
-            ui->lbl_result->setText(QStringLiteral("已设置：单曲循环"));
-            return;
-        }
-        if (param == QStringLiteral("folder")) {
-            m_playerController->setPlayMode(PlayMode::FolderLoop);
-            ui->lbl_result->setText(QStringLiteral("已设置：文件夹循环"));
-            return;
-        }
-        if (param == QStringLiteral("all")) {
-            m_playerController->setPlayMode(PlayMode::AllLoop);
-            ui->lbl_result->setText(QStringLiteral("已设置：全部循环"));
-            return;
-        }
-        if (param == QStringLiteral("random")) {
-            m_playerController->setPlayMode(PlayMode::RandomPlay);
-            ui->lbl_result->setText(QStringLiteral("已设置：随机播放"));
-            return;
-        }
-        ui->lbl_result->setText(QStringLiteral("播放模式参数无效"));
-        return;
-    }
-
-    if (cmd == QStringLiteral("search")) {
-        const QString keyword = param.trimmed();
-        if (keyword.isEmpty()) {
-            ui->lbl_result->setText(QStringLiteral("未找到相关歌曲"));
-            return;
-        }
-
-        int targetIndex = -1;
-        for (int i = 0; i < m_allSongs.size(); ++i) {
-            if (m_allSongs[i].filePath == keyword) {
-                targetIndex = i;
-                break;
-            }
-        }
-
-        if (targetIndex < 0) {
-            for (int i = 0; i < m_allSongs.size(); ++i) {
-                const SongInfo &song = m_allSongs[i];
-                if (song.title.contains(keyword, Qt::CaseInsensitive)
-                    || song.artist.contains(keyword, Qt::CaseInsensitive)) {
-                    targetIndex = i;
-                    break;
-                }
-            }
-        }
-
-        if (targetIndex < 0) {
-            ui->lbl_result->setText(QStringLiteral("未找到相关歌曲：") + keyword);
-            return;
-        }
-
-        emit playRequested(m_allSongs[targetIndex].filePath);
-        /*
-        m_playerController->setPlaylist(m_allSongs);
-        PlayContext ctx;
-        ctx.scopeList = m_allSongs;
-        ctx.source = PlayContext::All;
-        ctx.globalIndex = targetIndex;
-        ctx.scopeIndex = targetIndex;
-        m_playerController->setContext(ctx);
-        m_playerController->playSong(targetIndex);
-        */
-        const QFileInfo info(m_allSongs[targetIndex].filePath);
-        const QString title = m_allSongs[targetIndex].title.trimmed().isEmpty()
-                                  ? info.completeBaseName()
-                                  : m_allSongs[targetIndex].title.trimmed();
-        ui->lbl_result->setText(QStringLiteral("已播放：") + title);
-        return;
-    }
-
-    if (cmd == QStringLiteral("unknown")) {
-        ui->lbl_result->setText(QStringLiteral("未识别指令，请重试"));
-        return;
-    }
-
-    ui->lbl_result->setText(QStringLiteral("未识别指令，请重试"));
 }
 
-void VoiceInputWidget::onRecognizing(){
-    ui->lbl_result->setText(QStringLiteral("联网识别中..."));
+void VoiceInputWidget::onPillShuffleClicked()
+{
+    appendChatMessage(true, QStringLiteral("随机播放"));
+    if (m_aiController != nullptr) {
+        m_aiController->recognize(QStringLiteral("随机播放"));
+    }
 }
 
-void VoiceInputWidget::onRecognizeFailed(const QString &error){
-    if (error.contains(QStringLiteral("超时"))) {
-        ui->lbl_result->setText(QStringLiteral("网络超时，请重试"));
-        return;
-    }
-    // AiController 已带「网络错误：」「接口错误：」等前缀时不重复拼接
-    if (error.startsWith(QStringLiteral("网络错误："))
-        || error.startsWith(QStringLiteral("接口错误："))) {
-        ui->lbl_result->setText(error);
-        return;
-    }
-    ui->lbl_result->setText(QStringLiteral("网络错误：") + error);
+void VoiceInputWidget::onRecognizing()
+{
+    m_micOverlay->setListening(true);
+    m_micOverlay->show();
+    updateMicOverlayGeometry();
 }
 
-void VoiceInputWidget::onDispatchResult(bool success, const QString &message){
-    ui->lbl_result->setText(message);
+void VoiceInputWidget::onRecognizeFailed(const QString &error)
+{
+    m_micOverlay->setListening(false);
+    m_micOverlay->hide();
+    updateMicOverlayGeometry();
+    appendChatMessage(false, error.trimmed().isEmpty() ? QStringLiteral("识别失败") : error);
+}
+
+void VoiceInputWidget::onDispatchResult(bool success, const QString &message)
+{
+    Q_UNUSED(success);
+    m_micOverlay->setListening(false);
+    m_micOverlay->hide();
+    updateMicOverlayGeometry();
+    appendChatMessage(false, message.isEmpty() ? QStringLiteral("完成") : message);
 }
