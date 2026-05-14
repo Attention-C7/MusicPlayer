@@ -9,8 +9,8 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia Network)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia Network)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets Multimedia Network Svg)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Multimedia Network Svg)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(TAGLIB REQUIRED taglib)
 pkg_check_modules(AUBIO REQUIRED aubio)
@@ -21,6 +21,8 @@ set(PROJECT_SOURCES
         musicplayer.h
         musicplayer.ui
         songinfo.h
+        glassiconbutton.cpp
+        glassiconbutton.h
         filescanner.cpp
         filescanner.h
         playercontroller.cpp
@@ -91,6 +93,7 @@ target_link_libraries(MusicPlayer PRIVATE
     Qt${QT_VERSION_MAJOR}::Widgets
     Qt${QT_VERSION_MAJOR}::Multimedia
     Qt${QT_VERSION_MAJOR}::Network
+    Qt${QT_VERSION_MAJOR}::Svg
     ${TAGLIB_LIBRARIES}
     ${AUBIO_LIBRARIES}
 )

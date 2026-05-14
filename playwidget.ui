@@ -176,53 +176,39 @@
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_controls">
      <property name="spacing">
-      <number>10</number>
+      <number>12</number>
      </property>
      <property name="alignment">
       <set>Qt::AlignHCenter</set>
      </property>
      <item>
-      <widget class="QPushButton" name="btn_prev">
+      <widget class="GlassIconButton" name="btn_prev">
+       <property name="minimumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="GlassIconButton" name="btn_playPause">
        <property name="minimumSize">
         <size>
          <width>56</width>
          <height>56</height>
         </size>
        </property>
-       <property name="text">
-        <string>⏮</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="btn_playPause">
-       <property name="minimumSize">
-        <size>
-         <width>64</width>
-         <height>64</height>
-        </size>
-       </property>
-       <property name="text">
-        <string>▶</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="btn_next">
-       <property name="minimumSize">
-        <size>
-         <width>56</width>
-         <height>56</height>
-        </size>
-       </property>
-       <property name="text">
-        <string>⏭</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="btn_volume">
-       <property name="minimumSize">
+       <property name="maximumSize">
         <size>
          <width>56</width>
          <height>56</height>
@@ -234,41 +220,97 @@
       </widget>
      </item>
      <item>
-      <widget class="QPushButton" name="btn_playMode">
+      <widget class="GlassIconButton" name="btn_next">
        <property name="minimumSize">
         <size>
-         <width>56</width>
-         <height>56</height>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
         </size>
        </property>
        <property name="text">
-        <string>🔀</string>
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="GlassIconButton" name="btn_volume">
+       <property name="minimumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="GlassIconButton" name="btn_playMode">
+       <property name="minimumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="text">
+        <string/>
        </property>
       </widget>
      </item>
     <item>
-     <widget class="QPushButton" name="btn_beat">
+     <widget class="GlassIconButton" name="btn_beat">
       <property name="minimumSize">
        <size>
-        <width>56</width>
-        <height>56</height>
+        <width>40</width>
+        <height>40</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>40</width>
+        <height>40</height>
        </size>
       </property>
       <property name="text">
-       <string>♪</string>
+       <string/>
       </property>
      </widget>
     </item>
      <item>
-      <widget class="QPushButton" name="btn_showList">
+      <widget class="GlassIconButton" name="btn_showList">
        <property name="minimumSize">
         <size>
-         <width>56</width>
-         <height>56</height>
+         <width>40</width>
+         <height>40</height>
+        </size>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>40</width>
+         <height>40</height>
         </size>
        </property>
        <property name="text">
-        <string>☰</string>
+        <string/>
        </property>
       </widget>
      </item>
@@ -291,6 +333,11 @@
    <class>PlayProgressSlider</class>
    <extends>QSlider</extends>
    <header>playprogressslider.h</header>
+  </customwidget>
+  <customwidget>
+   <class>GlassIconButton</class>
+   <extends>QPushButton</extends>
+   <header>glassiconbutton.h</header>
   </customwidget>
  </customwidgets>
  <resources/>
