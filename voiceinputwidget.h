@@ -44,13 +44,15 @@ public:
     /** 父级 PlayWidget 尺寸变化时同步底部抽屉几何（含滑入/收起目标矩形）。 */
     void applyDrawerGeometry(int playWidgetWidth, int playWidgetHeight);
 
+signals:
+    /** 抽屉展开/收起，供 PlayWidget 显示磨砂遮罩与分层。 */
+    void drawerOpenChanged(bool open);
+    void playRequested(const QString &filePath);
+
 public slots:
     void onRecognizing();
     void onRecognizeFailed(const QString &error);
     void onDispatchResult(bool success, const QString &message);
-
-signals:
-    void playRequested(const QString &filePath);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -66,6 +68,7 @@ private slots:
 private:
     void appendChatMessage(bool isUser, const QString &text);
     QRect computeDrawerGeometry() const;
+    int drawerOpenHeightPx() const;
     void setConversationVisible(bool visible);
     static QIcon makeSendIcon();
 

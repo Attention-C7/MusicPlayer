@@ -63,6 +63,8 @@ set(PROJECT_SOURCES
         playprogressslider.h
         voicechatdelegate.cpp
         voicechatdelegate.h
+        voicedrawerscrim.cpp
+        voicedrawerscrim.h
         filescanworker.cpp
         filescanworker.h
         resources.qrc

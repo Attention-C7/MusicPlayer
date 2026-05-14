@@ -25,11 +25,16 @@
 
 namespace {
 
-constexpr int kDrawerOpenHeight = 320;
+constexpr int kBottomChromeReserve = 130;
 constexpr int kDrawerClosedHeight = 52;
 constexpr int kDrawerAnimMs = 280;
 
 } // namespace
+
+int VoiceInputWidget::drawerOpenHeightPx() const
+{
+    return qBound(248, (m_playH * 46) / 100, 352);
+}
 
 static QIcon makeSendIconImpl()
 {
@@ -155,10 +160,11 @@ VoiceInputWidget::VoiceInputWidget(
 
     setStyleSheet(QStringLiteral(
         "#VoiceInputWidgetRoot {"
-        "background-color: rgba(26,26,46,248);"
-        "border-top: 1px solid #3a3a55;"
-        "border-top-left-radius: 16px;"
-        "border-top-right-radius: 16px;"
+        "background-color: rgba(32,32,52,0.94);"
+        "border: 1px solid rgba(255,255,255,0.10);"
+        "border-bottom: none;"
+        "border-top-left-radius: 18px;"
+        "border-top-right-radius: 18px;"
         "}"));
 
     m_micOverlay = new MicOverlayWidget(this);
@@ -229,8 +235,9 @@ void VoiceInputWidget::applyDrawerGeometry(int playWidgetWidth, int playWidgetHe
 
 QRect VoiceInputWidget::computeDrawerGeometry() const
 {
-    const int h = m_drawerOpen ? kDrawerOpenHeight : kDrawerClosedHeight;
-    return QRect(0, m_playH - h, m_playW, h);
+    const int h = m_drawerOpen ? drawerOpenHeightPx() : kDrawerClosedHeight;
+    const int y = qMax(0, m_playH - kBottomChromeReserve - h);
+    return QRect(0, y, m_playW, h);
 }
 
 void VoiceInputWidget::resizeEvent(QResizeEvent *event)
@@ -296,6 +303,8 @@ void VoiceInputWidget::onToggleDrawerClicked()
     ui->btn_toggle->setText(m_drawerOpen
         ? QStringLiteral("▼ 收起语音与指令")
         : QStringLiteral("▲ 语音与指令"));
+
+    emit drawerOpenChanged(m_drawerOpen);
 
     m_drawerGeomAnim->stop();
     m_drawerGeomAnim->setStartValue(geometry());

@@ -32,6 +32,7 @@ QT_END_NAMESPACE
 
 class AiController;
 class LyricLineRow;
+class VoiceDrawerScrimWidget;
 
 class PlayWidget : public QWidget   //PlayWidget 继承自 QWidget，作为可布局、可绘制的整块播放界面。
 {
@@ -63,6 +64,8 @@ private slots:
     void onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState state);
     void onSessionPlaybackActiveChanged(bool active);
     void onBeatButtonClicked();
+    void onVoiceDrawerOpenChanged(bool open);
+    void captureVoiceBackdropOnce();
 
 private:
     void paintEvent(QPaintEvent *event) override;   //自定义绘制：模糊背景图、圆角封面等（节拍闪光仅在 BeatLyricWidget 全屏）。
@@ -81,6 +84,9 @@ private:
     /** 节拍按钮：根据是否有歌词更新提示文案、高亮（可进入节拍歌词全屏时暖色描边）。 */
     void updateBeatLyricButtonState();
 
+    void scheduleVoiceBackdropCapture();
+    void syncVoiceScrimGeometry();
+
     void resizeEvent(QResizeEvent *event) override;
     bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -92,7 +98,8 @@ private:
     int m_currentLrcIndex;  //当前高亮歌词行索引，避免每帧全表扫描（具体逻辑在 .cpp）。
     QList<LyricLineRow *> m_lrcRows;  //歌词行控件：悬停左侧显示播放与时间，点击跳转。
     AiController *m_aiController;  //AI 相关逻辑，构造里 new AiController(this)，父对象为 PlayWidget。
-    VoiceInputWidget *m_voiceWidget;  //语音输入条；构造里再 new，并塞进 ui->verticalLayout_main。
+    VoiceInputWidget *m_voiceWidget;  //语音抽屉：浮动于播放区底部，不放入 verticalLayout_main。
+    VoiceDrawerScrimWidget *m_voiceScrim;  //抽屉展开时的磨砂遮罩（盖在内容上、抽屉下）。
     QList<SongInfo> m_allSongs;  //与 setSearchContext 参数对应的缓存，供语音部件检索。
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;

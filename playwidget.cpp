@@ -3,6 +3,7 @@
 
 #include "beatlyricwidget.h"
 #include "lyriclinerow.h"
+#include "voicedrawerscrim.h"
 #include "volumesafety.h"
 
 #include <algorithm>
@@ -26,7 +27,7 @@
 #include <QSlider>
 #include <QSpacerItem>
 #include <QStyle>
-#include <QToolTip>
+#include <QTimer>
 #include <QVBoxLayout>
 
 PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent)
@@ -49,6 +50,7 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_lblVolumePercent(nullptr)
     , m_btnVolumeMute(nullptr)
     , m_lrcScrollAnim(nullptr)
+    , m_voiceScrim(nullptr)
 {
     ui->setupUi(this);
     m_lrcScrollAnim = new QPropertyAnimation(ui->scrollArea_lrc->verticalScrollBar(), QByteArrayLiteral("value"), this);
@@ -56,11 +58,13 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     m_lrcScrollAnim->setEasingCurve(QEasingCurve::OutCubic);
     setAttribute(Qt::WA_TranslucentBackground, false);
     setAutoFillBackground(false);
+    m_voiceScrim = new VoiceDrawerScrimWidget(this);
     m_voiceWidget = new VoiceInputWidget(
         m_aiController, m_controller,
         m_allSongs, m_artistMap, m_albumMap, this
     );
     m_voiceWidget->setParent(this);
+    connect(m_voiceWidget, &VoiceInputWidget::drawerOpenChanged, this, &PlayWidget::onVoiceDrawerOpenChanged);
     m_voiceWidget->raise();
     m_voiceWidget->applyDrawerGeometry(width(), height());
 
@@ -632,11 +636,63 @@ void PlayWidget::onControllerVolumePercentChanged(int percent)
     }
 }
 
+void PlayWidget::onVoiceDrawerOpenChanged(bool open)
+{
+    if (m_voiceScrim == nullptr) {
+        return;
+    }
+    m_voiceScrim->setVisible(open);
+    if (open) {
+        syncVoiceScrimGeometry();
+        m_voiceScrim->raise();
+        m_voiceWidget->raise();
+        scheduleVoiceBackdropCapture();
+    } else {
+        m_voiceScrim->clearBackdrop();
+    }
+}
+
+void PlayWidget::scheduleVoiceBackdropCapture()
+{
+    QTimer::singleShot(300, this, &PlayWidget::captureVoiceBackdropOnce);
+}
+
+void PlayWidget::syncVoiceScrimGeometry()
+{
+    if (m_voiceScrim == nullptr || !m_voiceScrim->isVisible()) {
+        return;
+    }
+    m_voiceScrim->setGeometry(0, 0, width(), height());
+}
+
+void PlayWidget::captureVoiceBackdropOnce()
+{
+    if (m_voiceScrim == nullptr || !m_voiceScrim->isVisible() || m_voiceWidget == nullptr) {
+        return;
+    }
+    const int split = m_voiceWidget->y();
+    if (split < 12) {
+        return;
+    }
+    const QPixmap snap = grab(QRect(0, 0, width(), split));
+    if (!snap.isNull()) {
+        m_voiceScrim->setBackdropBlurred(snap);
+    }
+    syncVoiceScrimGeometry();
+    m_voiceScrim->raise();
+    m_voiceWidget->raise();
+}
+
 void PlayWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     if (m_voiceWidget != nullptr) {
         m_voiceWidget->applyDrawerGeometry(event->size().width(), event->size().height());
+        m_voiceWidget->raise();
+    }
+    syncVoiceScrimGeometry();
+    if (m_voiceScrim != nullptr && m_voiceScrim->isVisible()) {
+        m_voiceScrim->raise();
         m_voiceWidget->raise();
     }
     if (m_volumePopup != nullptr && m_volumePopup->isVisible()) {
