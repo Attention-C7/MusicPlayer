@@ -12,18 +12,4 @@
     <file>icon/10list.png</file>
     <file>icon/11beat.png</file>
   </qresource>
-  <qresource prefix="/icons/svg">
-    <file alias="prev.svg">icons/svg/prev.svg</file>
-    <file alias="next.svg">icons/svg/next.svg</file>
-    <file alias="play.svg">icons/svg/play.svg</file>
-    <file alias="pause.svg">icons/svg/pause.svg</file>
-    <file alias="repeat_one.svg">icons/svg/repeat_one.svg</file>
-    <file alias="repeat_list.svg">icons/svg/repeat_list.svg</file>
-    <file alias="repeat_all.svg">icons/svg/repeat_all.svg</file>
-    <file alias="shuffle.svg">icons/svg/shuffle.svg</file>
-    <file alias="volume.svg">icons/svg/volume.svg</file>
-    <file alias="volume_mute.svg">icons/svg/volume_mute.svg</file>
-    <file alias="list.svg">icons/svg/list.svg</file>
-    <file alias="beat.svg">icons/svg/beat.svg</file>
-  </qresource>
 </RCC>

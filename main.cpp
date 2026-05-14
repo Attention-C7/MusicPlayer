@@ -25,18 +25,6 @@ int main(int argc, char *argv[])    //标准C++入口：argc/argv交给Qt解析
         background-color: transparent;
     }
 
-    GlassIconButton {
-        border: none;
-        padding: 0;
-        outline: none;
-        background-color: transparent;
-    }
-
-    GlassIconButton:hover,
-    GlassIconButton:pressed {
-        background-color: transparent;
-    }
-
     QLabel#lbl_title {
         font-size: 26px;
         font-weight: bold;
@@ -87,6 +75,24 @@ int main(int argc, char *argv[])    //标准C++入口：argc/argv交给Qt解析
 
     QPushButton:pressed {
         background-color: #333355;
+    }
+
+    QPushButton#btn_playPause {
+        font-size: 22px;
+        color: #ffffff;
+        background-color: transparent;
+        border-radius: 20px;
+        padding: 10px 16px;
+        min-width: 48px;
+        min-height: 48px;
+    }
+
+    QPushButton#btn_playPause:hover {
+        background-color: #ff6900;
+    }
+
+    QPushButton#btn_playPause:pressed {
+        background-color: #cc5500;
     }
 
     QListWidget {

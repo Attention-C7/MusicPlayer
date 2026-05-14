@@ -3,7 +3,6 @@
 
 #include "beatlyricwidget.h"
 #include "lyriclinerow.h"
-#include "glassiconbutton.h"
 #include "volumesafety.h"
 
 #include <algorithm>
@@ -77,36 +76,20 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     ui->btn_playMode->setText(QString());
     ui->btn_beat->setText(QString());
     ui->btn_showList->setText(QString());
-    ui->btn_volume->setText(QString());
-
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_prev)) {
-        g->setChipRole(GlassIconButton::ChipRole::Secondary40);
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/prev.svg"));
-    }
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_next)) {
-        g->setChipRole(GlassIconButton::ChipRole::Secondary40);
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/next.svg"));
-    }
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_volume)) {
-        g->setChipRole(GlassIconButton::ChipRole::Secondary40);
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/volume.svg"));
-    }
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_playMode)) {
-        g->setChipRole(GlassIconButton::ChipRole::Secondary40);
-    }
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_beat)) {
-        g->setChipRole(GlassIconButton::ChipRole::Secondary40);
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/beat.svg"));
-        g->setBeatVisualEnabled(true);
-    }
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_showList)) {
-        g->setChipRole(GlassIconButton::ChipRole::Secondary40);
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/list.svg"));
-    }
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_playPause)) {
-        g->setChipRole(GlassIconButton::ChipRole::MainPlay56);
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/play.svg"));
-    }
+    ui->btn_prev->setIcon(QIcon(QStringLiteral(":/icons/icon/1previous.png")));
+    ui->btn_playPause->setIcon(QIcon(QStringLiteral(":/icons/icon/2play.png")));
+    ui->btn_next->setIcon(QIcon(QStringLiteral(":/icons/icon/4next.png")));
+    ui->btn_beat->setIcon(QIcon(QStringLiteral(":/icons/icon/11beat.png")));
+    ui->btn_showList->setIcon(QIcon(QStringLiteral(":/icons/icon/10list.png")));
+    ui->btn_volume->setIcon(QIcon(QStringLiteral(":/icons/icon/9volume.png")));
+    const QSize iconSize(28, 28);
+    ui->btn_prev->setIconSize(iconSize);
+    ui->btn_playPause->setIconSize(iconSize);
+    ui->btn_next->setIconSize(iconSize);
+    ui->btn_volume->setIconSize(iconSize);
+    ui->btn_playMode->setIconSize(iconSize);
+    ui->btn_beat->setIconSize(iconSize);
+    ui->btn_showList->setIconSize(iconSize);
 
     setupVolumePopup();
     setPlayModeIcon(m_controller->playMode());
@@ -338,11 +321,9 @@ void PlayWidget::onControllerPlaybackStateChanged(QMediaPlayer::PlaybackState st
 
 void PlayWidget::onSessionPlaybackActiveChanged(bool active)
 {
-    if (auto *g = qobject_cast<GlassIconButton *>(ui->btn_playPause)) {
-        g->setSvgResourcePath(active
-            ? QStringLiteral(":/icons/svg/pause.svg")
-            : QStringLiteral(":/icons/svg/play.svg"));
-    }
+    ui->btn_playPause->setIcon(QIcon(active
+        ? QStringLiteral(":/icons/icon/3pause.png")
+        : QStringLiteral(":/icons/icon/2play.png")));
     ui->turntableAlbum->setTonearmOnRecord(active);
 }
 
@@ -371,11 +352,42 @@ void PlayWidget::updateBeatLyricButtonState()
             "当前歌曲无歌词文件，无法进入节拍歌词全屏\n（若有同名 .lrc，重新扫描曲库后可匹配）"));
     }
 
-    if (auto *beatBtn = qobject_cast<GlassIconButton *>(ui->btn_beat)) {
-        const int level = m_beatEffect ? 2 : (canEnterBeatLyric ? 1 : 0);
-        beatBtn->setBeatChrome(level);
-        beatBtn->setAccentActive(m_beatEffect);
+    QString sheet;
+    if (m_beatEffect) {
+        sheet = QStringLiteral(
+            "QPushButton {"
+            "background-color: rgba(255, 255, 255, 40);"
+            "border: 1px solid rgba(255, 255, 255, 120);"
+            "border-radius: 28px;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: rgba(255, 255, 255, 55);"
+            "border-color: rgba(255, 255, 255, 160);"
+            "}");
+    } else if (canEnterBeatLyric) {
+        sheet = QStringLiteral(
+            "QPushButton {"
+            "background-color: rgba(255, 200, 120, 45);"
+            "border: 2px solid rgba(255, 180, 80, 220);"
+            "border-radius: 28px;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: rgba(255, 210, 140, 70);"
+            "border-color: rgba(255, 200, 100, 255);"
+            "}");
+    } else {
+        sheet = QStringLiteral(
+            "QPushButton {"
+            "background-color: transparent;"
+            "border: 1px solid rgba(255, 255, 255, 55);"
+            "border-radius: 28px;"
+            "}"
+            "QPushButton:hover {"
+            "background-color: rgba(255, 255, 255, 18);"
+            "border-color: rgba(255, 255, 255, 95);"
+            "}");
     }
+    ui->btn_beat->setStyleSheet(sheet);
 }
 
 void PlayWidget::onBeatButtonClicked()
@@ -522,14 +534,10 @@ void PlayWidget::refreshVolumeButtonIcon()
     if (ui->btn_volume == nullptr) {
         return;
     }
-    auto *g = qobject_cast<GlassIconButton *>(ui->btn_volume);
-    if (g == nullptr) {
-        return;
-    }
     if (m_controller->isMuted() || m_controller->volumePercent() <= 0) {
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/volume_mute.svg"));
+        ui->btn_volume->setIcon(style()->standardIcon(QStyle::SP_MediaVolumeMuted));
     } else {
-        g->setSvgResourcePath(QStringLiteral(":/icons/svg/volume.svg"));
+        ui->btn_volume->setIcon(QIcon(QStringLiteral(":/icons/icon/9volume.png")));
     }
 }
 
@@ -675,35 +683,21 @@ QString PlayWidget::formatTime(qint64 ms) const
 
 void PlayWidget::setPlayModeIcon(PlayMode mode)
 {
-    auto *g = qobject_cast<GlassIconButton *>(ui->btn_playMode);
-    if (g == nullptr) {
-        return;
-    }
-
-    QString path;
     switch (mode) {
     case PlayMode::SingleLoop:
-        path = QStringLiteral(":/icons/svg/repeat_one.svg");
-        break;
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/5repeatone.png")));
+        return;
     case PlayMode::FolderLoop:
-        path = QStringLiteral(":/icons/svg/repeat_list.svg");
-        break;
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/6repeatlist.png")));
+        return;
     case PlayMode::AllLoop:
-        path = QStringLiteral(":/icons/svg/repeat_all.svg");
-        break;
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/7repeatall.png")));
+        return;
     case PlayMode::RandomPlay:
-        path = QStringLiteral(":/icons/svg/shuffle.svg");
-        break;
-    default:
-        path = QStringLiteral(":/icons/svg/repeat_list.svg");
-        break;
+        ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/8shuffle.png")));
+        return;
     }
-    g->setSvgResourcePath(path);
-
-    const bool accent = (mode == PlayMode::RandomPlay
-        || mode == PlayMode::SingleLoop
-        || mode == PlayMode::AllLoop);
-    g->setAccentActive(accent);
+    ui->btn_playMode->setIcon(QIcon(QStringLiteral(":/icons/icon/6repeatlist.png")));
 }
 
 void PlayWidget::updateLrcDisplay(qint64 position)
