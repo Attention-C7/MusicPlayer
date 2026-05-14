@@ -104,13 +104,20 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     // 播放列表元数据更新时 → 同步更新当前歌曲信息
     connect(m_controller, &PlayerController::playlistMetaUpdated, this, [this](int index, const SongInfo &info) {
         bool updated = false;//先用 index 找（最快）
+        const auto mergeSong = [&info](SongInfo &row) {
+            const QString keepCover = row.coverCachePath;
+            row = info;
+            if (row.coverCachePath.isEmpty() && !keepCover.isEmpty()) {
+                row.coverCachePath = keepCover;
+            }
+        };
         if (index >= 0 && index < m_allSongs.size() && m_allSongs[index].filePath == info.filePath) {
-            m_allSongs[index] = info;
+            mergeSong(m_allSongs[index]);
             updated = true;
         } else {//index 不对 → 遍历用路径找
             for (int i = 0; i < m_allSongs.size(); ++i) {
                 if (m_allSongs[i].filePath == info.filePath) {
-                    m_allSongs[i] = info;
+                    mergeSong(m_allSongs[i]);
                     updated = true;
                     break;
                 }
@@ -125,6 +132,10 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
         emit searchContextUpdated(m_allSongs, m_artistMap, m_albumMap);
         if (m_currentTab == 1 || m_currentTab == 2) {//如果当前在【专辑分类】页或【歌手分类】页
             refreshGroupList(m_currentTab);// 刷新列表，显示当前专辑/歌手
+        } else if (m_currentTab == 3) {
+            refreshAllSongsList();
+        } else if (m_currentTab == 0) {
+            refreshList();
         }
     });
     syncTabVisuals();
@@ -220,6 +231,7 @@ void ListWidget::refreshList()
         item->setData(LibraryList::Role::path, song.filePath); //设置列表项路径为歌曲路径
         item->setData(LibraryList::Role::artist, song.artist);
         item->setData(LibraryList::Role::durationMs, song.duration);
+        item->setData(LibraryList::Role::coverPath, song.coverCachePath);
         item->setSizeHint(QSize(0, 68)); //与 LibraryListDelegate 歌曲行高一致
         ui->listWidget_files->addItem(item); //添加到列表
     }
@@ -463,6 +475,7 @@ void ListWidget::refreshGroupList(int tab)
                 songItem->setData(LibraryList::Role::groupName, groupName); // 保存分组名
                 songItem->setData(LibraryList::Role::artist, song.artist);
                 songItem->setData(LibraryList::Role::durationMs, song.duration);
+                songItem->setData(LibraryList::Role::coverPath, song.coverCachePath);
                 songItem->setSizeHint(QSize(0, 68)); // 行高（与 LibraryListDelegate 歌曲行一致）
                 ui->listWidget_files->addItem(songItem);
             }
@@ -493,6 +506,7 @@ void ListWidget::refreshAllSongsList()
         item->setData(LibraryList::Role::path, song.filePath); // 保存歌曲路径
         item->setData(LibraryList::Role::artist, song.artist);
         item->setData(LibraryList::Role::durationMs, song.duration);
+        item->setData(LibraryList::Role::coverPath, song.coverCachePath);
         item->setSizeHint(QSize(0, 68)); // 行高（与 LibraryListDelegate 歌曲行一致）
         ui->listWidget_files->addItem(item);
     }

@@ -2,10 +2,16 @@
 
 #include <QDir> //列目录、判断存在、过滤文件
 #include <QDirIterator> //递归遍历子目录
+#include <QFile> //写封面缓存
 #include <QFileInfo> //文件信息。拿绝对路径、基名、存在性，符合「路径用 QDir/QFileInfo」的用法。
 #include <QFileInfoList>    //文件列表
+#include <QStandardPaths> //封面缓存目录
 
+#include <taglib/attachedpictureframe.h>
+#include <taglib/audioproperties.h>
 #include <taglib/fileref.h> //读音频内嵌标签（标题/艺人/专辑等），与 CMake 里链接的 TagLib 对应
+#include <taglib/id3v2tag.h>
+#include <taglib/mpegfile.h>
 #include <taglib/tag.h> //TagLib 标签结构，用于读取 ID3 元数据。
 
 namespace  //音频扩展名过滤，供 scanFiles/scanAllFiles/scanSubDirs 使用。
@@ -14,7 +20,76 @@ QStringList audioNameFilters()
 {
     return {"*.mp3", "*.wav", "*.wma", "*.MP3", "*.WAV", "*.WMA"};
 }
+
+constexpr int kMaxEmbeddedCoverBytes = 512 * 1024;
+
+static QString coverCacheDirPath()
+{
+    return QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
+        + QStringLiteral("/MusicPlayer/covers");
 }
+
+static QString coverCacheFilePathForSong(const QString &songPath)
+{
+    return coverCacheDirPath() + QLatin1Char('/') + QString::number(qHash(songPath), 16) + QStringLiteral(".apic");
+}
+
+static void fillDurationFromAudio(TagLib::FileRef &f, SongInfo *song)
+{
+    if (f.isNull() || song == nullptr) {
+        return;
+    }
+    TagLib::AudioProperties *ap = f.audioProperties();
+    if (ap == nullptr) {
+        return;
+    }
+    const int lenSec = ap->length();
+    if (lenSec > 0) {
+        song->duration = static_cast<qint64>(lenSec) * 1000LL;
+    }
+}
+
+static void tryExtractId3Cover(TagLib::FileRef &f, SongInfo *song)
+{
+    if (song == nullptr) {
+        return;
+    }
+    song->coverCachePath.clear();
+    auto *mf = dynamic_cast<TagLib::MPEG::File *>(f.file());
+    if (mf == nullptr || !mf->isValid()) {
+        return;
+    }
+    TagLib::ID3v2::Tag *id3 = mf->ID3v2Tag(false);
+    if (id3 == nullptr) {
+        return;
+    }
+    const TagLib::ID3v2::FrameList frames = id3->frameList("APIC");
+    for (unsigned fi = 0; fi < frames.size(); ++fi) {
+        TagLib::ID3v2::Frame *const fr = frames[fi];
+        auto *pic = dynamic_cast<TagLib::ID3v2::AttachedPictureFrame *>(fr);
+        if (pic == nullptr) {
+            continue;
+        }
+        const TagLib::ByteVector &bytes = pic->picture();
+        if (bytes.size() < 32 || bytes.size() > kMaxEmbeddedCoverBytes) {
+            continue;
+        }
+        const QString outPath = coverCacheFilePathForSong(song->filePath);
+        if (!QDir().mkpath(coverCacheDirPath())) {
+            continue;
+        }
+        QFile out(outPath);
+        if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            continue;
+        }
+        out.write(bytes.data(), static_cast<qint64>(bytes.size()));
+        out.close();
+        song->coverCachePath = outPath;
+        break;
+    }
+}
+
+} // namespace
 
 QList<SongInfo> FileScanner::scanFiles(const QString &dirPath)
 {
@@ -81,7 +156,10 @@ QList<SongInfo> FileScanner::scanFiles(const QString &dirPath)
             }
         }
 
-        song.duration = 0; //扫描阶段不从TagLib读时长；真正时长一般由QMediaPlayer在播放/加载媒体后更新（与 PlayerController 的职责划分一致，也避免扫描时解码开销）
+        if (!f.isNull()) {
+            fillDurationFromAudio(f, &song);
+            tryExtractId3Cover(f, &song);
+        }
 
         songs.append(song); //追加到结果列表
     }

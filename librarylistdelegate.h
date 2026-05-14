@@ -20,6 +20,7 @@ inline constexpr int durationMs = Qt::UserRole + 3;
 inline constexpr int isCurrent = Qt::UserRole + 4;
 inline constexpr int isExpanded = Qt::UserRole + 5;
 inline constexpr int artist = Qt::UserRole + 6;
+inline constexpr int coverPath = Qt::UserRole + 7;
 }
 
 } // namespace LibraryList

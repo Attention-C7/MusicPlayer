@@ -1,10 +1,14 @@
 #include "librarylistdelegate.h"
 
 #include <QApplication>
+#include <QFile>
 #include <QFileInfo>
 #include <QFontMetrics>
+#include <QHash>
 #include <QPainter>
+#include <QPixmap>
 #include <QPainterPath>
+#include <QStringList>
 #include <QStyle>
 
 namespace {
@@ -25,6 +29,32 @@ QString formatDurationMs(qint64 ms)
     const qint64 m = totalSec / 60;
     const qint64 s = totalSec % 60;
     return QStringLiteral("%1:%2").arg(m).arg(s, 2, 10, QChar('0'));
+}
+
+static QHash<QString, QPixmap> g_coverThumbCache;
+static QStringList g_coverThumbOrder;
+
+static QPixmap pixmapForCoverCacheFile(const QString &cachePath)
+{
+    if (cachePath.isEmpty() || !QFile::exists(cachePath)) {
+        return QPixmap();
+    }
+    auto it = g_coverThumbCache.find(cachePath);
+    if (it != g_coverThumbCache.end()) {
+        return it.value();
+    }
+    QPixmap raw;
+    if (!raw.load(cachePath)) {
+        return QPixmap();
+    }
+    const QPixmap scaled = raw.scaled(kThumbSide, kThumbSide, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+    g_coverThumbCache.insert(cachePath, scaled);
+    g_coverThumbOrder.append(cachePath);
+    while (g_coverThumbOrder.size() > 96) {
+        const QString old = g_coverThumbOrder.takeFirst();
+        g_coverThumbCache.remove(old);
+    }
+    return scaled;
 }
 
 QColor thumbBackgroundForPath(const QString &path)
@@ -129,15 +159,29 @@ void drawFileRow(QPainter *p, const QStyleOptionViewItem &opt, const QModelIndex
 
     const QRect inner = full.adjusted(kRowPadH, kRowPadV, -kRowPadH, -kRowPadV);
     const QRect thumbR(inner.left(), inner.top() + (inner.height() - kThumbSide) / 2, kThumbSide, kThumbSide);
-    drawPlaceholderThumb(p, thumbR, path, title);
+    const QString coverCache = index.data(LibraryList::Role::coverPath).toString();
+    const QPixmap coverPm = pixmapForCoverCacheFile(coverCache);
+    if (!coverPm.isNull()) {
+        p->save();
+        p->setRenderHint(QPainter::Antialiasing, true);
+        QPainterPath clip;
+        clip.addRoundedRect(QRectF(thumbR), 6.0, 6.0);
+        p->setClipPath(clip);
+        const int x = thumbR.center().x() - coverPm.width() / 2;
+        const int y = thumbR.center().y() - coverPm.height() / 2;
+        p->drawPixmap(x, y, coverPm);
+        p->restore();
+    } else {
+        drawPlaceholderThumb(p, thumbR, path, title);
+    }
 
     const int textLeft = thumbR.right() + 12;
     const QString durStr = formatDurationMs(dur);
-    QFontMetrics fmTitle(opt.font);
+    QFontMetrics fmDur(opt.font);
+    const int durW = qMax(56, fmDur.horizontalAdvance(durStr) + 14);
     QFont titleFont = opt.font;
     titleFont.setBold(true);
-    fmTitle = QFontMetrics(titleFont);
-    const int durW = fmTitle.horizontalAdvance(durStr) + 8;
+    const QFontMetrics fmTitle(titleFont);
     const int half = inner.height() / 2;
     const QRect titleR(textLeft, inner.top(), inner.right() - textLeft - durW, half);
     const QRect subR(textLeft, inner.top() + half, inner.right() - textLeft - durW, inner.height() - half);
