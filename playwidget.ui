@@ -27,7 +27,7 @@
     <number>24</number>
    </property>
    <property name="bottomMargin">
-    <number>20</number>
+    <number>64</number>
    </property>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_top">

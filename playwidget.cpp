@@ -17,6 +17,7 @@
 #include <QHBoxLayout>
 #include <QIcon>
 #include <QMouseEvent>
+#include <QMargins>
 #include <QMessageBox>
 #include <QPainter>
 #include <QPropertyAnimation>
@@ -30,6 +31,15 @@
 #include <QTimer>
 #include <QToolTip>
 #include <QVBoxLayout>
+
+namespace {
+
+/** 与 voiceinputwidget.cpp 中 kDrawerClosedHeight 一致（底栏收起高度）。 */
+constexpr int kVoiceCollapsedStripHeightPx = 52;
+constexpr int kAboveVoiceStripGapPx = 12;
+constexpr int kMainLayoutBottomReserveForVoicePx = kVoiceCollapsedStripHeightPx + kAboveVoiceStripGapPx;
+
+} // namespace
 
 PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController, QWidget *parent)
     : QWidget(parent)
@@ -54,6 +64,11 @@ PlayWidget::PlayWidget(PlayerController *controller, AiController *aiController,
     , m_voiceScrim(nullptr)
 {
     ui->setupUi(this);
+    {
+        QMargins mg = ui->verticalLayout_main->contentsMargins();
+        mg.setBottom(kMainLayoutBottomReserveForVoicePx);
+        ui->verticalLayout_main->setContentsMargins(mg);
+    }
     m_lrcScrollAnim = new QPropertyAnimation(ui->scrollArea_lrc->verticalScrollBar(), QByteArrayLiteral("value"), this);
     m_lrcScrollAnim->setDuration(220);
     m_lrcScrollAnim->setEasingCurve(QEasingCurve::OutCubic);

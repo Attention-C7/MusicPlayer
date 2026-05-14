@@ -87,6 +87,8 @@ VoiceInputWidget::VoiceInputWidget(
 {
     ui->setupUi(this);
     setObjectName(QStringLiteral("VoiceInputWidgetRoot"));
+    /** 否则在部分平台/主题下，样式表背景不铺满布局留白，右侧易露出默认浅色底。 */
+    setAttribute(Qt::WA_StyledBackground, true);
 
     m_chatDelegate = new VoiceChatDelegate(ui->list_chat);
     ui->list_chat->setItemDelegate(m_chatDelegate);
@@ -163,6 +165,7 @@ VoiceInputWidget::VoiceInputWidget(
         "font-size: 14px;"
         "}"
         "QPushButton:hover { background-color: #333355; color: #FF7043; border-color: #FF7043; }"));
+    ui->btn_toggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     setStyleSheet(QStringLiteral(
         "#VoiceInputWidgetRoot {"
