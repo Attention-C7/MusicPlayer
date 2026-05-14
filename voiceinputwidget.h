@@ -64,11 +64,12 @@ private slots:
     void onPillPauseClicked();
     void onPillShuffleClicked();
     void updateMicOverlayGeometry();
+    void onDrawerGeomAnimFinished();
 
 private:
     void appendChatMessage(bool isUser, const QString &text);
     QRect computeDrawerGeometry() const;
-    int drawerOpenHeightPx() const;
+    void updateRootChrome();
     void setConversationVisible(bool visible);
     static QIcon makeSendIcon();
 
@@ -81,6 +82,7 @@ private:
     bool m_drawerOpen;
     int m_playW;
     int m_playH;
+    bool m_lastRootChromeFull;
     QList<SongInfo> m_allSongs;
     QMap<QString, QList<SongInfo>> m_artistMap;
     QMap<QString, QList<SongInfo>> m_albumMap;

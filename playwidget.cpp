@@ -671,7 +671,17 @@ void PlayWidget::captureVoiceBackdropOnce()
     if (m_voiceScrim == nullptr || !m_voiceScrim->isVisible() || m_voiceWidget == nullptr) {
         return;
     }
-    const int split = m_voiceWidget->y();
+    const int ph = height();
+    const int vy = m_voiceWidget->y();
+    const int vh = m_voiceWidget->height();
+    if (vh >= ph - 24 && vy <= 8) {
+        m_voiceScrim->clearBackdrop();
+        syncVoiceScrimGeometry();
+        m_voiceScrim->raise();
+        m_voiceWidget->raise();
+        return;
+    }
+    const int split = vy;
     if (split < 12) {
         return;
     }

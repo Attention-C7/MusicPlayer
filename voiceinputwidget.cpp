@@ -20,21 +20,17 @@
 #include <QPropertyAnimation>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QSizePolicy>
 #include <QStyleOptionViewItem>
 #include <QToolButton>
 
 namespace {
 
-constexpr int kBottomChromeReserve = 130;
 constexpr int kDrawerClosedHeight = 52;
-constexpr int kDrawerAnimMs = 280;
+constexpr int kDrawerAnimMs = 300;
+constexpr int kFullPanelHeightThreshold = kDrawerClosedHeight + 80;
 
 } // namespace
-
-int VoiceInputWidget::drawerOpenHeightPx() const
-{
-    return qBound(248, (m_playH * 46) / 100, 352);
-}
 
 static QIcon makeSendIconImpl()
 {
@@ -82,6 +78,7 @@ VoiceInputWidget::VoiceInputWidget(
     , m_drawerOpen(false)
     , m_playW(800)
     , m_playH(500)
+    , m_lastRootChromeFull(false)
     , m_allSongs(std::move(allSongs))
     , m_artistMap(std::move(artistMap))
     , m_albumMap(std::move(albumMap))
@@ -94,6 +91,13 @@ VoiceInputWidget::VoiceInputWidget(
     ui->list_chat->setSelectionMode(QAbstractItemView::NoSelection);
     ui->list_chat->setFocusPolicy(Qt::NoFocus);
     ui->list_chat->setSpacing(2);
+    ui->list_chat->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    if (ui->verticalLayout_root != nullptr) {
+        const int li = ui->verticalLayout_root->indexOf(ui->list_chat);
+        if (li >= 0) {
+            ui->verticalLayout_root->setStretch(li, 1);
+        }
+    }
     ui->list_chat->setStyleSheet(QStringLiteral(
         "QListWidget { background: transparent; color: #e8e8ef; border: none; }"
         "QListWidget::item { background: transparent; border: none; padding: 0; }"));
@@ -172,7 +176,7 @@ VoiceInputWidget::VoiceInputWidget(
 
     m_drawerGeomAnim->setDuration(kDrawerAnimMs);
     m_drawerGeomAnim->setEasingCurve(QEasingCurve::OutCubic);
-    connect(m_drawerGeomAnim, &QPropertyAnimation::finished, this, &VoiceInputWidget::updateMicOverlayGeometry);
+    connect(m_drawerGeomAnim, &QPropertyAnimation::finished, this, &VoiceInputWidget::onDrawerGeomAnimFinished);
 
     if (m_aiController != nullptr) {
         m_aiController->setSearchContext(m_allSongs, m_artistMap, m_albumMap);
@@ -231,19 +235,53 @@ void VoiceInputWidget::applyDrawerGeometry(int playWidgetWidth, int playWidgetHe
         setGeometry(computeDrawerGeometry());
     }
     updateMicOverlayGeometry();
+    updateRootChrome();
 }
 
 QRect VoiceInputWidget::computeDrawerGeometry() const
 {
-    const int h = m_drawerOpen ? drawerOpenHeightPx() : kDrawerClosedHeight;
-    const int y = qMax(0, m_playH - kBottomChromeReserve - h);
-    return QRect(0, y, m_playW, h);
+    if (m_drawerOpen) {
+        return QRect(0, 0, m_playW, m_playH);
+    }
+    return QRect(0, qMax(0, m_playH - kDrawerClosedHeight), m_playW, kDrawerClosedHeight);
 }
 
 void VoiceInputWidget::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     updateMicOverlayGeometry();
+    updateRootChrome();
+}
+
+void VoiceInputWidget::onDrawerGeomAnimFinished()
+{
+    updateMicOverlayGeometry();
+    updateRootChrome();
+}
+
+void VoiceInputWidget::updateRootChrome()
+{
+    const bool fullPanel = height() > kFullPanelHeightThreshold;
+    if (fullPanel == m_lastRootChromeFull) {
+        return;
+    }
+    m_lastRootChromeFull = fullPanel;
+    if (fullPanel) {
+        setStyleSheet(QStringLiteral(
+            "#VoiceInputWidgetRoot {"
+            "background-color: rgba(22,22,38,0.98);"
+            "border: none;"
+            "}"));
+    } else {
+        setStyleSheet(QStringLiteral(
+            "#VoiceInputWidgetRoot {"
+            "background-color: rgba(32,32,52,0.94);"
+            "border: 1px solid rgba(255,255,255,0.10);"
+            "border-bottom: none;"
+            "border-top-left-radius: 18px;"
+            "border-top-right-radius: 18px;"
+            "}"));
+    }
 }
 
 void VoiceInputWidget::updateMicOverlayGeometry()
@@ -301,7 +339,7 @@ void VoiceInputWidget::onToggleDrawerClicked()
     m_drawerOpen = !m_drawerOpen;
     setConversationVisible(m_drawerOpen);
     ui->btn_toggle->setText(m_drawerOpen
-        ? QStringLiteral("▼ 收起语音与指令")
+        ? QStringLiteral("▼ 返回播放")
         : QStringLiteral("▲ 语音与指令"));
 
     emit drawerOpenChanged(m_drawerOpen);

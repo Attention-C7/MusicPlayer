@@ -40,6 +40,9 @@
     </widget>
    </item>
    <item>
+    <property name="stretch">
+     <number>1</number>
+    </property>
     <widget class="QListWidget" name="list_chat">
      <property name="frameShape">
       <enum>QFrame::NoFrame</enum>
