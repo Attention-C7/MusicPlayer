@@ -26,6 +26,8 @@
 
 namespace {
 
+/** 与 playwidget.ui 中 verticalLayout_main 左右 margin 一致，底条与进度区对齐。 */
+constexpr int kDrawerHorizontalInset = 24;
 constexpr int kDrawerClosedHeight = 52;
 constexpr int kDrawerAnimMs = 300;
 constexpr int kFullPanelHeightThreshold = kDrawerClosedHeight + 80;
@@ -243,7 +245,12 @@ QRect VoiceInputWidget::computeDrawerGeometry() const
     if (m_drawerOpen) {
         return QRect(0, 0, m_playW, m_playH);
     }
-    return QRect(0, qMax(0, m_playH - kDrawerClosedHeight), m_playW, kDrawerClosedHeight);
+    const int barW = qMax(1, m_playW - 2 * kDrawerHorizontalInset);
+    return QRect(
+        kDrawerHorizontalInset,
+        qMax(0, m_playH - kDrawerClosedHeight),
+        barW,
+        kDrawerClosedHeight);
 }
 
 void VoiceInputWidget::resizeEvent(QResizeEvent *event)
