@@ -18,6 +18,7 @@ class ListWidget;
 QT_END_NAMESPACE
 
 class QListWidgetItem;   //前向声明 QListWidgetItem：私有方法参数里用到指针，不必在头里 #include <QListWidgetItem>，减轻依赖。
+class LibraryListDelegate;
 
 class ListWidget : public QWidget
 {
@@ -63,6 +64,7 @@ private:
     void handleGroupItemClicked(QListWidgetItem *item);   //处理分组点击：根据 item 类型（文件/文件夹/分组）调用不同处理逻辑。
     void startBackgroundScan();   //启动后台扫描：初始化扫描线程和工作者，连接信号槽，启动线程。起线程、建 worker、连 requestScan、在扫描结束后 onScanFinished。
     void onScanFinished(QList<SongInfo> songs);   //扫描完成：更新 m_allSongs、m_albumMap、m_artistMap，并 emit searchContextUpdated 信号。
+    void syncTabVisuals();   //Tab 下划线与高亮：与曲库自定义列表行样式统一
 
     Ui::ListWidget *ui;  //Designer 生成控件树（列表、Tab 按钮、返回键等）。
     PlayerController *m_controller;  //播放与播放列表，不负责 delete（由 MusicPlayer 拥有）。
@@ -82,4 +84,5 @@ private:
     QStringList m_subDirs;  //当前目录下所有子目录路径列表。
     QList<SongInfo> m_currentSongs;  //当前目录下所有歌曲列表。
     QString m_currentPlayingFilePath;  //当前播放歌曲路径：用于高亮当前播放曲。
+    LibraryListDelegate *m_libraryListDelegate;   //曲库列表行：缩略图占位、时长、当前曲条；父为 listWidget_files 随其析构
 };

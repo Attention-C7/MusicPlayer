@@ -1,23 +1,18 @@
 #include "listwidget.h"
+#include "librarylistdelegate.h"
 #include "ui_listwidget.h"
 
-#include <QBrush>   //画刷，用于填充矩形区域：高亮前景
+#include <QAbstractItemView>
 #include <QDir>   //目录，用于操作文件系统：路径规范化与显示名
 #include <QFileInfo>
 #include <QListWidgetItem>   //列表项，用于显示文件/文件夹/分组：数据绑定、类型识别、样式设置等
 #include <QPainter>
 #include <QPaintEvent>
+#include <QPushButton>
 #include <QQueue>   //BFS 构建 m_dirSubdirsMap
 #include <QSet>   //集合，用于存储访问过的文件路径：去重与查找
 #include <QVariant>   //变体，用于存储列表项数据：类型安全的数据容器
 
-namespace   //私有枚举：列表项类型与数据角色
-{
-constexpr int RoleItemType = Qt::UserRole;   //列表项类型
-constexpr int RolePath = Qt::UserRole + 1;   //文件路径
-constexpr int RoleGroupName = Qt::UserRole + 2;   //分组名称
-}
-//构造：传入 PlayerController *（播放控制器，负责播放逻辑），parent 交给 QWidget
 ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     : QWidget(parent)   //父窗口是parent，QWidget是所有窗口组件的基类，提供窗口管理、事件处理、绘制等功能
     , ui(new Ui::ListWidget)   //初始化UI：加载界面设计器生成的界面，设置窗口无边框、透明背景
@@ -26,8 +21,16 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     , m_worker(nullptr)   //初始化扫描工作者：nullptr，表示未创建
     , m_scanReady(false)   //初始化扫描准备状态：false，表示未准备好
     , m_currentTab(0)   //初始化当前标签页：0=文件夹，1=专辑，2=歌手，3=全部
+    , m_libraryListDelegate(nullptr)
 {   //初始化UI：加载界面设计器生成的界面，设置窗口无边框、透明背景
     ui->setupUi(this);   //在this上创建.ui文件对应的UI对象，并初始化其子控件
+    m_libraryListDelegate = new LibraryListDelegate(ui->listWidget_files);
+    ui->listWidget_files->setItemDelegate(m_libraryListDelegate);
+    ui->listWidget_files->setSpacing(4);
+    ui->listWidget_files->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    ui->listWidget_files->setStyleSheet(QStringLiteral(
+        "QListWidget { background: rgba(0,0,0,0.2); border: none; outline: none; color: #e8e8ef; }"
+        "QListWidget::item:selected { background: transparent; }"));
     setWindowFlags(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
 
@@ -60,18 +63,22 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
         m_dirStack.clear();
         m_currentTab = 0;
         refreshList();// 刷新列表
+        syncTabVisuals();
     });//切换到【专辑分类】页
     connect(ui->btn_tab_album, &QPushButton::clicked, this, [this]() {
         m_currentTab = 1;
         refreshGroupList(1);// 按专辑分组显示
+        syncTabVisuals();
     });//切换到【歌手分类】页
     connect(ui->btn_tab_artist, &QPushButton::clicked, this, [this]() {
         m_currentTab = 2;
         refreshGroupList(2);// 按歌手分组显示
+        syncTabVisuals();
     });//切换到【全部歌曲】页
     connect(ui->btn_tab_all, &QPushButton::clicked, this, [this]() {
         m_currentTab = 3;
         refreshAllSongsList();// 显示所有歌曲
+        syncTabVisuals();
     });
     // 歌曲切换时 → 同步高亮当前播放歌曲
     connect(m_controller, &PlayerController::songChanged, this, [this](const SongInfo &info) {
@@ -120,6 +127,7 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
             refreshGroupList(m_currentTab);// 刷新列表，显示当前专辑/歌手
         }
     });
+    syncTabVisuals();
 }
 // 列表界面析构函数（关闭界面时自动调用）
 ListWidget::~ListWidget()
@@ -192,13 +200,12 @@ void ListWidget::refreshList()
     for (const QString &subDirPath : m_subDirs) {
         const QFileInfo folderInfo(subDirPath); //子目录的文件信息
         auto *item = new QListWidgetItem(QStringLiteral("[%1]").arg(folderInfo.fileName())); //创建一个列表项，显示子目录名称
-        item->setData(RoleItemType, FolderItem); //设置列表项类型为文件夹
-        item->setData(RolePath, subDirPath); //设置列表项路径为子目录路径
-        item->setSizeHint(QSize(0, 50)); //设置列表项大小
+        item->setData(LibraryList::Role::itemType, static_cast<int>(LibraryList::ItemType::folder)); //设置列表项类型为文件夹
+        item->setData(LibraryList::Role::path, subDirPath); //设置列表项路径为子目录路径
+        item->setSizeHint(QSize(0, 48)); //设置列表项大小（与 LibraryListDelegate 文件夹行一致）
         ui->listWidget_files->addItem(item); //添加到列表
     }
     // 显示【当前文件夹内的歌曲】
-    const int numberWidth = QString::number(m_currentSongs.size()).size(); //歌曲数量的宽度
     for (int i = 0; i < m_currentSongs.size(); ++i) { //遍历当前文件夹内的歌曲
         const SongInfo &song = m_currentSongs[i]; //当前歌曲
         const QFileInfo songInfo(song.filePath); //歌曲的文件信息
@@ -207,14 +214,13 @@ void ListWidget::refreshList()
             title = songInfo.completeBaseName(); //使用文件名
         }
         const QString artist = song.artist.trimmed(); //歌曲的艺术家
-        const QString displayText = QStringLiteral("%1  %2\n%3") //显示文本
-                                        .arg(i + 1, numberWidth, 10, QChar(' ')) //序号
-                                        .arg(title) //标题
-                                        .arg(artist); //艺术家
-        auto *item = new QListWidgetItem(displayText); //创建一个列表项，显示歌曲信息
-        item->setData(RoleItemType, FileItem); //设置列表项类型为歌曲
-        item->setData(RolePath, song.filePath); //设置列表项路径为歌曲路径
-        item->setSizeHint(QSize(0, 50)); //设置列表项大小
+        auto *item = new QListWidgetItem(title);
+        item->setToolTip(QStringLiteral("%1\n%2").arg(song.filePath, artist.isEmpty() ? QStringLiteral("—") : artist));
+        item->setData(LibraryList::Role::itemType, static_cast<int>(LibraryList::ItemType::file)); //设置列表项类型为歌曲
+        item->setData(LibraryList::Role::path, song.filePath); //设置列表项路径为歌曲路径
+        item->setData(LibraryList::Role::artist, song.artist);
+        item->setData(LibraryList::Role::durationMs, song.duration);
+        item->setSizeHint(QSize(0, 68)); //与 LibraryListDelegate 歌曲行高一致
         ui->listWidget_files->addItem(item); //添加到列表
     }
 
@@ -260,20 +266,18 @@ void ListWidget::updateCurrentPathLabel()
     }
     ui->lbl_currentPath->setText(relative);
 }
-// 更新播放高亮：当前播放的歌曲变橙色
+// 更新播放高亮：当前播放曲由 LibraryListDelegate 根据 Role::isCurrent 绘制
 void ListWidget::updatePlayingHighlight()
 {
-    for (int i = 0; i < ui->listWidget_files->count(); ++i) {// 遍历列表里每一行
-        QListWidgetItem *item = ui->listWidget_files->item(i); // 拿到当前行
-        const int type = item->data(RoleItemType).toInt();// 拿到当前行类型
-        const QString path = item->data(RolePath).toString();// 拿到当前行路径
-
-        if (type == FileItem && !m_currentPlayingFilePath.isEmpty() && path == m_currentPlayingFilePath) {
-            item->setForeground(QBrush(QColor("#ff6900")));// 设为橙色高亮
-        } else {
-            item->setForeground(QBrush(QColor("#ffffff")));// 其他所有行都变回白色
-        }
+    for (int i = 0; i < ui->listWidget_files->count(); ++i) {
+        QListWidgetItem *item = ui->listWidget_files->item(i);
+        const int type = item->data(LibraryList::Role::itemType).toInt();
+        const QString path = item->data(LibraryList::Role::path).toString();
+        const bool isCur = (type == static_cast<int>(LibraryList::ItemType::file))
+            && !m_currentPlayingFilePath.isEmpty() && path == m_currentPlayingFilePath;
+        item->setData(LibraryList::Role::isCurrent, isCur);
     }
+    ui->listWidget_files->viewport()->update();
 }
 // 处理列表项点击（文件夹 / 歌曲）
 void ListWidget::handleItemClicked(QListWidgetItem *item)
@@ -282,17 +286,17 @@ void ListWidget::handleItemClicked(QListWidgetItem *item)
         return;
     }
     // 取出当前点击项的类型和路径
-    const int type = item->data(RoleItemType).toInt();// 拿到当前行类型     
-    const QString path = item->data(RolePath).toString();   // 拿到当前行路径
+    const int type = item->data(LibraryList::Role::itemType).toInt();// 拿到当前行类型     
+    const QString path = item->data(LibraryList::Role::path).toString();   // 拿到当前行路径
 
-    if (type == FolderItem) {//点击的是【文件夹】→ 入栈当前路径，并刷新列表
+    if (type == static_cast<int>(LibraryList::ItemType::folder)) {//点击的是【文件夹】→ 入栈当前路径，并刷新列表
         m_dirStack.push(m_currentPath);// 把当前路径压入返回栈
         m_currentPath = path;// 进入新文件夹
         refreshList();// 刷新列表
         return;
     }
 
-    if (type != FileItem) {//点击的不是【歌曲】→ 直接返回
+    if (type != static_cast<int>(LibraryList::ItemType::file)) {//点击的不是【歌曲】→ 直接返回
         return;
     }
     if (m_currentTab == 3) {
@@ -438,13 +442,13 @@ void ListWidget::refreshGroupList(int tab)
         const QList<SongInfo> &songs = it.value();// 该分组下的歌曲
 
         auto *groupItem = new QListWidgetItem(QStringLiteral("%1 (%2)").arg(groupName).arg(songs.size()));
-        groupItem->setData(RoleItemType, GroupItem); // 标记类型：分组
-        groupItem->setData(RoleGroupName, groupName);// 保存分组名
-        groupItem->setSizeHint(QSize(0, 42));// 行高42
+        groupItem->setData(LibraryList::Role::itemType, static_cast<int>(LibraryList::ItemType::group)); // 标记类型：分组
+        groupItem->setData(LibraryList::Role::groupName, groupName);// 保存分组名
+        groupItem->setData(LibraryList::Role::isExpanded, m_expandedGroup == groupName);
+        groupItem->setSizeHint(QSize(0, 44));// 行高（与 LibraryListDelegate 分组行一致）
         ui->listWidget_files->addItem(groupItem);
         // 如果当前展开的分组是该分组，则显示该分组下的歌曲
         if (m_expandedGroup == groupName) {
-            const int numberWidth = QString::number(songs.size()).size();// 序号对齐宽度
             for (int i = 0; i < songs.size(); ++i) {// 遍历该分组下所有歌曲
                 const SongInfo &song = songs[i];// 当前歌曲
                 QString title = song.title.trimmed();
@@ -452,16 +456,14 @@ void ListWidget::refreshGroupList(int tab)
                     title = QFileInfo(song.filePath).completeBaseName();// 使用文件名
                 }
                 const QString artist = song.artist.trimmed();// 歌手名称
-                const QString displayText = QStringLiteral("    %1  %2\n    %3")
-                                                .arg(i + 1, numberWidth, 10, QChar(' '))
-                                                .arg(title)
-                                                .arg(artist);
-                // 创建歌曲项
-                auto *songItem = new QListWidgetItem(displayText);
-                songItem->setData(RoleItemType, FileItem); // 标记类型：歌曲
-                songItem->setData(RolePath, song.filePath); // 保存歌曲路径
-                songItem->setData(RoleGroupName, groupName); // 保存分组名
-                songItem->setSizeHint(QSize(0, 50)); // 行高50
+                auto *songItem = new QListWidgetItem(title);
+                songItem->setToolTip(QStringLiteral("%1\n%2").arg(song.filePath, artist.isEmpty() ? QStringLiteral("—") : artist));
+                songItem->setData(LibraryList::Role::itemType, static_cast<int>(LibraryList::ItemType::file)); // 标记类型：歌曲
+                songItem->setData(LibraryList::Role::path, song.filePath); // 保存歌曲路径
+                songItem->setData(LibraryList::Role::groupName, groupName); // 保存分组名
+                songItem->setData(LibraryList::Role::artist, song.artist);
+                songItem->setData(LibraryList::Role::durationMs, song.duration);
+                songItem->setSizeHint(QSize(0, 68)); // 行高（与 LibraryListDelegate 歌曲行一致）
                 ui->listWidget_files->addItem(songItem);
             }
         }
@@ -478,8 +480,6 @@ void ListWidget::refreshAllSongsList()
         ui->listWidget_files->addItem(QStringLiteral("加载中..."));
         return;
     }
-    // 计算序号需要的宽度，让所有序号对齐（比如 1~100 → 占3位宽度）
-    const int numberWidth = QString::number(m_allSongs.size()).size();
     for (int i = 0; i < m_allSongs.size(); ++i) {
         const SongInfo &song = m_allSongs[i];
         QString title = song.title.trimmed();
@@ -487,15 +487,13 @@ void ListWidget::refreshAllSongsList()
             title = QFileInfo(song.filePath).completeBaseName();
         }
         const QString artist = song.artist.trimmed();
-        const QString displayText = QStringLiteral("%1  %2\n%3")
-                                        .arg(i + 1, numberWidth, 10, QChar(' '))
-                                        .arg(title)
-                                        .arg(artist);
-        // 创建歌曲项
-        auto *item = new QListWidgetItem(displayText);
-        item->setData(RoleItemType, FileItem); // 标记类型：歌曲
-        item->setData(RolePath, song.filePath); // 保存歌曲路径
-        item->setSizeHint(QSize(0, 50)); // 行高50
+        auto *item = new QListWidgetItem(title);
+        item->setToolTip(QStringLiteral("%1\n%2").arg(song.filePath, artist.isEmpty() ? QStringLiteral("—") : artist));
+        item->setData(LibraryList::Role::itemType, static_cast<int>(LibraryList::ItemType::file)); // 标记类型：歌曲
+        item->setData(LibraryList::Role::path, song.filePath); // 保存歌曲路径
+        item->setData(LibraryList::Role::artist, song.artist);
+        item->setData(LibraryList::Role::durationMs, song.duration);
+        item->setSizeHint(QSize(0, 68)); // 行高（与 LibraryListDelegate 歌曲行一致）
         ui->listWidget_files->addItem(item);
     }
 
@@ -508,10 +506,10 @@ void ListWidget::handleGroupItemClicked(QListWidgetItem *item)
         return;
     }
     // 取出当前点击项的类型和分组名
-    const int type = item->data(RoleItemType).toInt();// 拿到当前行类型
-    const QString groupName = item->data(RoleGroupName).toString();// 拿到当前行分组名
+    const int type = item->data(LibraryList::Role::itemType).toInt();// 拿到当前行类型
+    const QString groupName = item->data(LibraryList::Role::groupName).toString();// 拿到当前行分组名
 
-    if (type == GroupItem) {//点击的是【分组】→ 展开/折叠分组
+    if (type == static_cast<int>(LibraryList::ItemType::group)) {//点击的是【分组】→ 展开/折叠分组
         if (m_expandedGroup == groupName) {
             m_expandedGroup.clear();// 如果点的是已经展开的分组 → 收起
         } else {
@@ -521,11 +519,11 @@ void ListWidget::handleGroupItemClicked(QListWidgetItem *item)
         return;
     }
 
-    if (type != FileItem) {//点击的不是【歌曲】→ 直接返回
+    if (type != static_cast<int>(LibraryList::ItemType::file)) {//点击的不是【歌曲】→ 直接返回
         return;
     }
     // 拿到当前分组的所有歌曲（专辑内 / 歌手内）
-    const QString filePath = item->data(RolePath).toString();// 拿到当前行歌曲路径
+    const QString filePath = item->data(LibraryList::Role::path).toString();// 拿到当前行歌曲路径
     const QMap<QString, QList<SongInfo>> &groupMap = (m_currentTab == 1) ? m_albumMap : m_artistMap;
     const QList<SongInfo> groupSongs = groupMap.value(groupName);// 拿到当前分组的所有歌曲
     if (groupSongs.isEmpty()) {// 如果当前分组没有歌曲，则直接返回
@@ -598,6 +596,30 @@ void ListWidget::onScanFinished(QList<SongInfo> songs)
         refreshGroupList(m_currentTab);//刷新列表
     }
 }
+void ListWidget::syncTabVisuals()
+{
+    auto applyTab = [](QPushButton *btn, bool selected) {
+        if (btn == nullptr) {
+            return;
+        }
+        if (selected) {
+            btn->setStyleSheet(QStringLiteral(
+                "QPushButton { background: transparent; color: #f5f5f8; font-weight: 600; border: none; "
+                "border-bottom: 3px solid #ff7043; padding: 10px 12px 7px 12px; } "
+                "QPushButton:hover { color: #ffab91; }"));
+        } else {
+            btn->setStyleSheet(QStringLiteral(
+                "QPushButton { background: transparent; color: #9090a8; font-weight: normal; border: none; "
+                "border-bottom: 3px solid transparent; padding: 10px 12px 7px 12px; } "
+                "QPushButton:hover { color: #d0d0e4; }"));
+        }
+    };
+    applyTab(ui->btn_tab_dir, m_currentTab == 0);
+    applyTab(ui->btn_tab_album, m_currentTab == 1);
+    applyTab(ui->btn_tab_artist, m_currentTab == 2);
+    applyTab(ui->btn_tab_all, m_currentTab == 3);
+}
+
 // 重绘事件：自己画窗口背景
 void ListWidget::paintEvent(QPaintEvent *event)
 {

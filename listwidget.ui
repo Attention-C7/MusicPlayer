@@ -34,6 +34,9 @@
    </item>
    <item>
     <layout class="QHBoxLayout" name="horizontalLayout_tabs">
+     <property name="spacing">
+      <number>8</number>
+     </property>
      <item>
       <widget class="QPushButton" name="btn_tab_dir">
        <property name="text">
@@ -61,6 +64,19 @@
         <string>全部</string>
        </property>
       </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_tabs">
+       <property name="orientation">
+        <enum>Qt::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
      </item>
     </layout>
    </item>

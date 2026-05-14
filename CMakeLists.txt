@@ -44,6 +44,8 @@ set(PROJECT_SOURCES
         voiceinputwidget.h
         voiceinputwidget.cpp
         voiceinputwidget.ui
+        librarylistdelegate.cpp
+        librarylistdelegate.h
         listwidget.cpp
         listwidget.h
         listwidget.ui
