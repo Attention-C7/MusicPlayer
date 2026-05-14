@@ -1,16 +1,15 @@
 #pragma once
 
 #include <QPixmap>
-#include <QShowEvent>
-#include <QHideEvent>
 #include <QVariantAnimation>
 #include <QWidget>
 
 class QEvent;
 
 /**
- * 唱片机风格封面：外圈沟槽与中心圆形封面；封面下为模糊放大光晕（参考主流播放器「随封面染色 + 柔光氛围」）。
- * 转盘旋转与唱臂摆动拆开：前者紧跟解码播放状态；后者应对「用户是否在播」语义（避免切歌时短暂 Stopped 误摆臂）。
+ * 唱片机风格封面（对齐 QQ 音乐类参考）：纯白圆角底座、柔和投影、外圈金属拉丝沟槽、中心圆形封面旋转；
+ * 唱臂为白支点 + 银配重 + 细金属臂 + 白头壳，与底座/转盘材质统一。
+ * 转盘旋转与唱臂摆动拆开：前者紧跟解码播放状态；后者应对「用户是否在播」语义。
  */
 class TurntableAlbumWidget : public QWidget
 {
@@ -28,24 +27,17 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void changeEvent(QEvent *event) override;
-    void showEvent(QShowEvent *event) override;
-    void hideEvent(QHideEvent *event) override;
 
 private slots:
     void onRotationValueChanged(const QVariant &value);
     void onTonearmAngleChanged(const QVariant &value);
-    void onGlowFlowValueChanged(const QVariant &value);
 
 private:
     void animateTonearmTo(qreal targetDeg);
-    void rebuildGlowBackdrop();
 
     QPixmap m_albumPixmap;
-    QPixmap m_glowBackdrop;
     QVariantAnimation *m_rotationAnim;
     QVariantAnimation *m_tonearmAnim;
-    QVariantAnimation *m_glowFlowAnim;
     qreal m_rotationDeg;
     qreal m_tonearmDeg;
-    qreal m_glowFlowT;
 };

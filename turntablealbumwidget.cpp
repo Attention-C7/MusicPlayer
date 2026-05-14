@@ -4,69 +4,25 @@
 #include <QEvent>
 #include <QPainter>
 #include <QPainterPath>
-#include <QHideEvent>
 #include <QPaintEvent>
-#include <QShowEvent>
-#include <QtMath>
 
 namespace {
 
-constexpr qreal kTwoPi = 6.28318530717958647692;
+constexpr int kShadowMargin = 6;
+constexpr int kBaseCornerRadius = 24;
 
 constexpr qreal kMsPerRevolution = 14000.0;
 
-/** 暂停：0° 臂身为竖直向下；播放：顺时针略转使针尖落在外圈沟槽。 */
+/** 暂停：0° 臂沿 +Y 竖直向下，针尖在沟槽外；播放略转使针尖落在外圈金属区。 */
 constexpr qreal kTonearmParkedDeg = 0.0;
-constexpr qreal kTonearmOnRecordDeg = 14.0;
+constexpr qreal kTonearmOnRecordDeg = 13.0;
 constexpr int kTonearmAnimMs = 280;
 
-constexpr qreal kArmLengthFactor = 0.62;
+constexpr qreal kArmLengthFactor = 0.58;
 
-/** 支点水平：相对「圆心 + platterR」向左缩进（相对布局短边）。 */
-constexpr qreal kPivotLeftOfCircleRightByLayout = 0.028;
-
-/** 支点垂直：相对布局短边，负值为圆心上侧。 */
-constexpr qreal kPivotUpFromCenterByLayout = 0.34;
-
-/** 光晕底层模糊处理边长（较小以减轻嵌入式 CPU / 内存）。 */
-constexpr int kGlowBlurProcessSide = 132;
-
-/** 光晕相对封面直径的放大倍率（略大于转盘，形成氛围光）。 */
-constexpr qreal kGlowDiameterFactor = 1.78;
-
-/** 缓慢相位循环，形成「流动」阴影/光晕位移（非 UI 瞬时过渡）。 */
-constexpr int kGlowFlowCycleMs = 2800;
-
-/**
- * 与全屏节拍垫图类似的轻量模糊：缩小再放大近似高斯，输出正方形光晕素材。
- */
-QPixmap makeBlurredSquareGlow(const QPixmap &source, int sideOut)
-{
-    if (source.isNull() || sideOut < 32) {
-        return QPixmap();
-    }
-
-    const QSize target(sideOut, sideOut);
-    QPixmap scaled = source.scaled(
-        target.width(),
-        target.height(),
-        Qt::KeepAspectRatioByExpanding,
-        Qt::SmoothTransformation);
-    if (scaled.isNull()) {
-        return QPixmap();
-    }
-
-    const int cx = qMax(0, (scaled.width() - target.width()) / 2);
-    const int cy = qMax(0, (scaled.height() - target.height()) / 2);
-    const QPixmap cropped = scaled.copy(cx, cy, target.width(), target.height());
-
-    const int maxSide = qMax(target.width(), target.height());
-    const int divisor = qBound(8, maxSide / 18, 36);
-    const int wSmall = qMax(24, target.width() / divisor);
-    const int hSmall = qMax(24, target.height() / divisor);
-    const QPixmap tiny = cropped.scaled(wSmall, hSmall, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-    return tiny.scaled(target, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-}
+/** 支点相对底座短边：水平在唱片圆最右端内侧；竖直在圆心上侧（底座右上角区域）。 */
+constexpr qreal kPivotLeftOfCircleRightByBase = 0.026;
+constexpr qreal kPivotUpFromCenterByBase = 0.32;
 
 } // namespace
 
@@ -74,10 +30,8 @@ TurntableAlbumWidget::TurntableAlbumWidget(QWidget *parent)
     : QWidget(parent)
     , m_rotationAnim(new QVariantAnimation(this))
     , m_tonearmAnim(new QVariantAnimation(this))
-    , m_glowFlowAnim(new QVariantAnimation(this))
     , m_rotationDeg(0.0)
     , m_tonearmDeg(kTonearmParkedDeg)
-    , m_glowFlowT(0.0)
 {
     setAttribute(Qt::WA_TranslucentBackground, true);
     setAutoFillBackground(false);
@@ -93,36 +47,11 @@ TurntableAlbumWidget::TurntableAlbumWidget(QWidget *parent)
     m_tonearmAnim->setEasingCurve(QEasingCurve::InOutCubic);
     connect(m_tonearmAnim, &QVariantAnimation::valueChanged,
             this, &TurntableAlbumWidget::onTonearmAngleChanged);
-
-    m_glowFlowAnim->setDuration(kGlowFlowCycleMs);
-    m_glowFlowAnim->setStartValue(0.0);
-    m_glowFlowAnim->setEndValue(1.0);
-    m_glowFlowAnim->setLoopCount(-1);
-    m_glowFlowAnim->setEasingCurve(QEasingCurve::Linear);
-    connect(m_glowFlowAnim, &QVariantAnimation::valueChanged,
-            this, &TurntableAlbumWidget::onGlowFlowValueChanged);
-}
-
-void TurntableAlbumWidget::rebuildGlowBackdrop()
-{
-    if (m_albumPixmap.isNull()) {
-        m_glowBackdrop = QPixmap();
-        return;
-    }
-    m_glowBackdrop = makeBlurredSquareGlow(m_albumPixmap, kGlowBlurProcessSide);
 }
 
 void TurntableAlbumWidget::setAlbumPixmap(const QPixmap &pixmap)
 {
     m_albumPixmap = pixmap;
-    rebuildGlowBackdrop();
-    if (m_glowBackdrop.isNull()) {
-        m_glowFlowAnim->stop();
-    } else if (isVisible()) {
-        if (m_glowFlowAnim->state() != QAbstractAnimation::Running) {
-            m_glowFlowAnim->start();
-        }
-    }
     update();
 }
 
@@ -158,12 +87,6 @@ void TurntableAlbumWidget::onTonearmAngleChanged(const QVariant &value)
     update();
 }
 
-void TurntableAlbumWidget::onGlowFlowValueChanged(const QVariant &value)
-{
-    m_glowFlowT = static_cast<qreal>(value.toDouble());
-    update();
-}
-
 void TurntableAlbumWidget::animateTonearmTo(qreal targetDeg)
 {
     if (qAbs(m_tonearmDeg - targetDeg) < 0.05) {
@@ -183,20 +106,6 @@ void TurntableAlbumWidget::changeEvent(QEvent *event)
     }
 }
 
-void TurntableAlbumWidget::showEvent(QShowEvent *event)
-{
-    QWidget::showEvent(event);
-    if (!m_glowBackdrop.isNull() && m_glowFlowAnim->state() != QAbstractAnimation::Running) {
-        m_glowFlowAnim->start();
-    }
-}
-
-void TurntableAlbumWidget::hideEvent(QHideEvent *event)
-{
-    m_glowFlowAnim->stop();
-    QWidget::hideEvent(event);
-}
-
 void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
@@ -214,79 +123,49 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
 
     const int side = qMin(wr.width(), wr.height());
     const QPoint center(wr.center());
-    const QPoint platterCenter(center);
 
-    const qreal platterR = static_cast<qreal>(side) * 0.42;
-    const qreal labelR = platterR * 0.68;
-    const qreal artR = labelR - 4.0;
-    const qreal glowD = (artR * 2.0) * kGlowDiameterFactor;
+    // --- 纯白圆角底座（QQ 音乐类）+ 柔和投影 ---
+    const QRect baseRect(
+        center.x() - side / 2 + kShadowMargin,
+        center.y() - side / 2 + kShadowMargin,
+        side - 2 * kShadowMargin,
+        side - 2 * kShadowMargin);
 
-    // --- 封面染色光晕（模糊放大副本 + 轻微位移/呼吸，参考 Spotify / Apple Music 类氛围底） ---
-    if (!m_glowBackdrop.isNull()) {
-        const qreal theta = m_glowFlowT * kTwoPi;
-        const qreal ofsX = 5.0 * qSin(theta);
-        const qreal ofsY = 4.0 * qCos(theta * 0.83);
-        const qreal pulse = 1.0 + 0.065 * qSin(theta * 1.65 + 0.4);
-        const qreal glowAlpha = 0.48 + 0.09 * qSin(theta * 1.2);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 38));
+    const QRect shadowR = baseRect.adjusted(5, 8, 9, 12);
+    painter.drawRoundedRect(shadowR, kBaseCornerRadius + 3, kBaseCornerRadius + 3);
 
-        painter.save();
-        painter.translate(platterCenter);
-        painter.translate(ofsX, ofsY);
-        painter.scale(pulse, pulse);
-        painter.translate(-platterCenter);
+    QLinearGradient baseGrad(baseRect.topLeft(), baseRect.bottomLeft());
+    baseGrad.setColorAt(0.0, QColor("#fefefe"));
+    baseGrad.setColorAt(0.55, QColor("#f7f7f5"));
+    baseGrad.setColorAt(1.0, QColor("#f0f0ed"));
+    painter.setBrush(baseGrad);
+    painter.setPen(QPen(QColor("#e6e6e2"), 1.0));
+    painter.drawRoundedRect(baseRect, kBaseCornerRadius, kBaseCornerRadius);
 
-        const QRectF glowRect(
-            platterCenter.x() - glowD / 2.0,
-            platterCenter.y() - glowD / 2.0,
-            glowD,
-            glowD);
-
-        QPainterPath glowClip;
-        glowClip.addEllipse(glowRect);
-        painter.setClipPath(glowClip);
-
-        painter.setOpacity(glowAlpha);
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(Qt::NoBrush);
-        painter.drawPixmap(glowRect.toRect(), m_glowBackdrop, m_glowBackdrop.rect());
-
-        // 毛玻璃感：中心略亮、边缘柔化（主流播放器常见的 frosted / material 叠层）
-        painter.setOpacity(qMin(1.0, glowAlpha + 0.12));
-        painter.setClipping(false);
-        QRadialGradient frost(platterCenter, glowD * 0.52);
-        frost.setColorAt(0.0, QColor(255, 255, 255, 38));
-        frost.setColorAt(0.5, QColor(255, 255, 255, 12));
-        frost.setColorAt(1.0, QColor(255, 255, 255, 0));
-        painter.setCompositionMode(QPainter::CompositionMode_SoftLight);
-        painter.setBrush(frost);
-        painter.drawEllipse(glowRect);
-        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-
-        // 外缘与主背景融合（Multiply 压边，避免椭圆外方角）
-        QRadialGradient edgeBlend(platterCenter, glowD * 0.55);
-        edgeBlend.setColorAt(0.65, QColor(26, 26, 46, 0));
-        edgeBlend.setColorAt(1.0, QColor(26, 26, 46, 88));
-        painter.setOpacity(0.75);
-        painter.setCompositionMode(QPainter::CompositionMode_Multiply);
-        painter.setBrush(edgeBlend);
-        painter.drawEllipse(glowRect);
-        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
-        painter.setOpacity(1.0);
-        painter.restore();
+    // 极轻竖向纹理，避免塑料感（静态、无「波动」动画）
+    painter.setPen(QColor(0, 0, 0, 5));
+    for (int x = baseRect.left() + 8; x < baseRect.right() - 8; x += 6) {
+        painter.drawLine(x, baseRect.top() + 10, x, baseRect.bottom() - 10);
     }
 
-    // --- 暗色转盘（与 #1a1a2e 主界面协调，无浅色悬浮底座） ---
+    const QPoint platterCenter(baseRect.center());
+    const qreal platterR = qMin(baseRect.width(), baseRect.height()) * 0.42;
+
+    // --- 外圈金属拉丝感（同心细环 + 径向高光） ---
     QRadialGradient platterGrad(platterCenter, platterR);
-    platterGrad.setColorAt(0.0, QColor("#2e2e44"));
-    platterGrad.setColorAt(0.78, QColor("#232336"));
-    platterGrad.setColorAt(1.0, QColor("#181824"));
+    platterGrad.setColorAt(0.0, QColor("#e4e6eb"));
+    platterGrad.setColorAt(0.72, QColor("#c9ced6"));
+    platterGrad.setColorAt(0.92, QColor("#b4bac5"));
+    platterGrad.setColorAt(1.0, QColor("#9aa3b0"));
     painter.setPen(Qt::NoPen);
     painter.setBrush(platterGrad);
     painter.drawEllipse(platterCenter, static_cast<int>(platterR), static_cast<int>(platterR));
 
-    const QColor grooveHi("#3d3d52");
-    const QColor grooveLo("#2a2a3e");
-    const int grooveCount = 28;
+    const QColor grooveHi("#d8dce3");
+    const QColor grooveLo("#bfc6d0");
+    const int grooveCount = 32;
     for (int i = 0; i < grooveCount; ++i) {
         const qreal t = static_cast<qreal>(i) / static_cast<qreal>(grooveCount);
         const qreal rr = platterR * (0.72 + t * 0.28);
@@ -296,9 +175,13 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
         painter.drawEllipse(platterCenter, static_cast<int>(rr), static_cast<int>(rr));
     }
 
-    painter.setPen(QPen(QColor("#0a0a12"), 3.0));
+    // 唱片内缘深色环（分隔金属区与封面）
+    const qreal labelR = platterR * 0.68;
+    painter.setPen(QPen(QColor("#2c2c32"), 2.5));
     painter.setBrush(Qt::NoBrush);
     painter.drawEllipse(platterCenter, static_cast<int>(labelR), static_cast<int>(labelR));
+
+    const qreal artR = labelR - 4.0;
 
     // --- 中心封面（旋转） ---
     painter.save();
@@ -323,18 +206,18 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
         painter.drawPixmap(artRect.topLeft(), scaled);
     } else {
         QRadialGradient hole(platterCenter, artR);
-        hole.setColorAt(0.0, QColor("#2a2a3e"));
-        hole.setColorAt(1.0, QColor("#1a1a2e"));
+        hole.setColorAt(0.0, QColor("#f5f5f7"));
+        hole.setColorAt(1.0, QColor("#dcdce2"));
         painter.fillPath(clipDisk, hole);
         painter.setClipping(false);
         QFont f = font();
         if (f.pointSizeF() > 0) {
-            f.setPointSizeF(f.pointSizeF() * 2.2);
+            f.setPointSizeF(f.pointSizeF() * 2.0);
         } else {
-            f.setPixelSize(qMax(22, static_cast<int>(artR * 0.35)));
+            f.setPixelSize(qMax(20, static_cast<int>(artR * 0.32)));
         }
         painter.setFont(f);
-        painter.setPen(QColor("#7e7e92"));
+        painter.setPen(QColor("#a0a0b0"));
         painter.drawText(QRectF(platterCenter.x() - artR, platterCenter.y() - artR,
                                artR * 2.0, artR * 2.0),
                          Qt::AlignCenter,
@@ -342,31 +225,63 @@ void TurntableAlbumWidget::paintEvent(QPaintEvent *event)
     }
     painter.restore();
 
-    const qreal pivotDx = platterR - static_cast<qreal>(side) * kPivotLeftOfCircleRightByLayout;
-    const qreal pivotDy = -static_cast<qreal>(side) * kPivotUpFromCenterByLayout;
+    // --- 唱臂：白支点 + 银配重 + 金属臂 + 白头壳 + 针尖（与底座/金属圈统一） ---
+    const int baseDim = qMin(baseRect.width(), baseRect.height());
+    const qreal pivotDx = platterR - static_cast<qreal>(baseDim) * kPivotLeftOfCircleRightByBase;
+    const qreal pivotDy = -static_cast<qreal>(baseDim) * kPivotUpFromCenterByBase;
     const qreal armLen = static_cast<qreal>(side) * kArmLengthFactor;
+    const qreal s = static_cast<qreal>(side);
 
     painter.save();
     painter.translate(center);
     painter.translate(pivotDx, pivotDy);
     painter.rotate(m_tonearmDeg);
 
-    QPainterPath arm;
-    arm.moveTo(0, 0);
-    arm.lineTo(0, armLen * 0.88);
-    arm.lineTo(-side * 0.028, armLen * 0.93);
-    arm.lineTo(-side * 0.038, armLen * 0.98);
-    painter.setPen(QPen(QColor("#c8cad4"), 3.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    painter.setBrush(Qt::NoBrush);
-    painter.drawPath(arm);
+    const qreal pivotR = s * 0.052;
+    painter.setPen(QPen(QColor("#d8d8dc"), 1.0));
+    painter.setBrush(QColor("#fafafa"));
+    painter.drawEllipse(QPointF(0, 0), pivotR, pivotR);
 
-    QLinearGradient wGrad(0, -10, 0, 10);
-    wGrad.setColorAt(0.0, QColor("#e8e9ef"));
-    wGrad.setColorAt(1.0, QColor("#8b90a0"));
-    painter.setBrush(wGrad);
-    painter.setPen(QPen(QColor("#6a7080"), 1.0));
-    painter.drawEllipse(QPointF(0, 0), 10.0, 10.0);
-    painter.setBrush(QColor("#d8dae2"));
-    painter.drawRoundedRect(QRectF(-15.0, -21.0, 13.0, 26.0), 4.0, 4.0);
+    const qreal cwW = s * 0.034;
+    const qreal cwH = s * 0.055;
+    QLinearGradient cwGrad(-cwW / 2, -cwH - 2, cwW / 2, -2);
+    cwGrad.setColorAt(0.0, QColor("#aeb4bf"));
+    cwGrad.setColorAt(0.5, QColor("#e8eaef"));
+    cwGrad.setColorAt(1.0, QColor("#8e95a3"));
+    painter.setBrush(cwGrad);
+    painter.setPen(QPen(QColor("#7a808c"), 1.0));
+    painter.drawRoundedRect(QRectF(-cwW / 2, -cwH - 3.0, cwW, cwH), 2.5, 2.5);
+
+    const qreal rodTop = pivotR * 0.35;
+    const qreal rodBot = armLen * 0.86;
+    const qreal rodW = qMax(2.2, s * 0.009);
+    QLinearGradient rodGrad(-rodW, 0, rodW, 0);
+    rodGrad.setColorAt(0.0, QColor("#a8aeb8"));
+    rodGrad.setColorAt(0.45, QColor("#eceef2"));
+    rodGrad.setColorAt(1.0, QColor("#9098a5"));
+    QPainterPath rodPath;
+    rodPath.addRoundedRect(QRectF(-rodW / 2, rodTop, rodW, rodBot - rodTop), rodW * 0.45, rodW * 0.45);
+    painter.fillPath(rodPath, rodGrad);
+    painter.setPen(QPen(QColor(255, 255, 255, 90), 0.8));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawLine(QPointF(-rodW * 0.15, rodTop + 4), QPointF(-rodW * 0.15, rodBot - 8));
+
+    const qreal hsW = s * 0.042;
+    const qreal hsH = s * 0.068;
+    const qreal hsCy = rodBot + hsH * 0.42;
+    painter.setPen(QPen(QColor("#e8e8ec"), 1.0));
+    painter.setBrush(QColor("#f6f6f8"));
+    painter.drawRoundedRect(QRectF(-hsW / 2, hsCy - hsH / 2, hsW, hsH), 3.5, 3.5);
+
+    painter.setPen(QPen(QColor("#c0c4cc"), 1.2));
+    painter.setBrush(QColor("#d0d4dc"));
+    const QPointF tip(0, hsCy + hsH * 0.48);
+    QPainterPath needle;
+    needle.moveTo(tip);
+    needle.lineTo(-s * 0.006, tip.y() + s * 0.022);
+    needle.lineTo(s * 0.006, tip.y() + s * 0.022);
+    needle.closeSubpath();
+    painter.drawPath(needle);
+
     painter.restore();
 }
