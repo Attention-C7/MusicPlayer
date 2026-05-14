@@ -32,6 +32,8 @@ public:
     void setAccentActive(bool active);
     /** 仅节拍按钮为 true：按 level 绘制无歌词/可进全屏/已开启三态描边。 */
     void setBeatVisualEnabled(bool enabled);
+    /** 与 setBeatVisualEnabled 配合：0 无歌词态，1 可进全屏，2 节拍已开启。 */
+    void setBeatChrome(int level);
 
     qreal clickScale() const { return m_clickScale; }
     void setClickScale(qreal scale);
