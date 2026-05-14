@@ -35,7 +35,7 @@
 namespace {
 
 /** 与 voiceinputwidget.cpp 中 kDrawerClosedHeight 一致（底栏收起高度）。 */
-constexpr int kVoiceCollapsedStripHeightPx = 52;
+constexpr int kVoiceCollapsedStripHeightPx = 56;
 constexpr int kAboveVoiceStripGapPx = 12;
 constexpr int kMainLayoutBottomReserveForVoicePx = kVoiceCollapsedStripHeightPx + kAboveVoiceStripGapPx;
 
@@ -689,7 +689,8 @@ void PlayWidget::captureVoiceBackdropOnce()
     const int ph = height();
     const int vy = m_voiceWidget->y();
     const int vh = m_voiceWidget->height();
-    if (vh >= ph - 24 && vy <= 8) {
+    // 展开后语音面板与主区一致带横向 inset，vy 约为 24 仍视为「盖住大半屏」→ 不用条带截图做模糊
+    if (vh >= ph - 24 && vy <= 32) {
         m_voiceScrim->clearBackdrop();
         syncVoiceScrimGeometry();
         m_voiceScrim->raise();

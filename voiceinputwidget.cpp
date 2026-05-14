@@ -28,7 +28,8 @@ namespace {
 
 /** 与 playwidget.ui 中 verticalLayout_main 左右 margin 一致，底条与进度区对齐。 */
 constexpr int kDrawerHorizontalInset = 24;
-constexpr int kDrawerClosedHeight = 52;
+/** verticalLayout_root 收起时仅 btn_toggle：上 8 + min 36 + 下 10 = 54，留余量避免裁字与底边 */
+constexpr int kDrawerClosedHeight = 56;
 constexpr int kDrawerAnimMs = 300;
 constexpr int kFullPanelHeightThreshold = kDrawerClosedHeight + 80;
 
@@ -154,17 +155,6 @@ VoiceInputWidget::VoiceInputWidget(
         sendBtn->setCursor(Qt::PointingHandCursor);
     }
 
-    ui->btn_toggle->setStyleSheet(QStringLiteral(
-        "QPushButton {"
-        "text-align: left;"
-        "padding: 8px 12px;"
-        "background-color: #2a2a3e;"
-        "color: #e8e8ef;"
-        "border: 1px solid #3a3a55;"
-        "border-radius: 10px;"
-        "font-size: 14px;"
-        "}"
-        "QPushButton:hover { background-color: #333355; color: #FF7043; border-color: #FF7043; }"));
     ui->btn_toggle->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
     setStyleSheet(QStringLiteral(
@@ -209,6 +199,7 @@ VoiceInputWidget::VoiceInputWidget(
     (void)m_playerController;
 
     setConversationVisible(false);
+    applyToggleVisualForState();
 }
 
 VoiceInputWidget::~VoiceInputWidget()
@@ -245,14 +236,15 @@ void VoiceInputWidget::applyDrawerGeometry(int playWidgetWidth, int playWidgetHe
 
 QRect VoiceInputWidget::computeDrawerGeometry() const
 {
+    const int inset = kDrawerHorizontalInset;
+    const int panelW = qMax(1, m_playW - 2 * inset);
     if (m_drawerOpen) {
-        return QRect(0, 0, m_playW, m_playH);
+        return QRect(inset, 0, panelW, m_playH);
     }
-    const int barW = qMax(1, m_playW - 2 * kDrawerHorizontalInset);
     return QRect(
-        kDrawerHorizontalInset,
+        inset,
         qMax(0, m_playH - kDrawerClosedHeight),
-        barW,
+        panelW,
         kDrawerClosedHeight);
 }
 
@@ -267,6 +259,37 @@ void VoiceInputWidget::onDrawerGeomAnimFinished()
 {
     updateMicOverlayGeometry();
     updateRootChrome();
+}
+
+void VoiceInputWidget::applyToggleVisualForState()
+{
+    if (ui->btn_toggle == nullptr) {
+        return;
+    }
+    if (!m_drawerOpen) {
+        ui->btn_toggle->setStyleSheet(QStringLiteral(
+            "QPushButton {"
+            "text-align: left;"
+            "padding: 10px 12px;"
+            "background-color: transparent;"
+            "color: #e8e8ef;"
+            "border: none;"
+            "font-size: 14px;"
+            "}"
+            "QPushButton:hover { color: #FF7043; background-color: rgba(255,112,67,0.12); }"));
+    } else {
+        ui->btn_toggle->setStyleSheet(QStringLiteral(
+            "QPushButton {"
+            "text-align: left;"
+            "padding: 12px 12px;"
+            "background-color: transparent;"
+            "color: #e8e8ef;"
+            "border: none;"
+            "border-bottom: 1px solid rgba(255,255,255,0.08);"
+            "font-size: 14px;"
+            "}"
+            "QPushButton:hover { color: #FF7043; background-color: rgba(255,112,67,0.10); }"));
+    }
 }
 
 void VoiceInputWidget::updateRootChrome()
@@ -292,6 +315,7 @@ void VoiceInputWidget::updateRootChrome()
             "border-top-right-radius: 18px;"
             "}"));
     }
+    applyToggleVisualForState();
 }
 
 void VoiceInputWidget::updateMicOverlayGeometry()
@@ -348,6 +372,7 @@ void VoiceInputWidget::onToggleDrawerClicked()
 {
     m_drawerOpen = !m_drawerOpen;
     setConversationVisible(m_drawerOpen);
+    applyToggleVisualForState();
     ui->btn_toggle->setText(m_drawerOpen
         ? QStringLiteral("▼ 返回播放")
         : QStringLiteral("▲ 语音与指令"));

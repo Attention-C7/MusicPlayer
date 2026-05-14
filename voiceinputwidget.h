@@ -70,6 +70,7 @@ private:
     void appendChatMessage(bool isUser, const QString &text);
     QRect computeDrawerGeometry() const;
     void updateRootChrome();
+    void applyToggleVisualForState();
     void setConversationVisible(bool visible);
     static QIcon makeSendIcon();
 
