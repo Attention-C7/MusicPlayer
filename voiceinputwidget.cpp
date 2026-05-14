@@ -15,6 +15,7 @@
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QPropertyAnimation>
 #include <QPushButton>
