@@ -1,5 +1,5 @@
 #include "musicplayer.h"
-#include "./ui_musicplayer.h"
+#include "ui_musicplayer.h"
 #include "commanddispatcher.h"
 #include <QGuiApplication>
 #include <QMouseEvent>

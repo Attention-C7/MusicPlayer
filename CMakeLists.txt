@@ -17,58 +17,58 @@ pkg_check_modules(AUBIO REQUIRED aubio)
 
 set(PROJECT_SOURCES
         main.cpp
-        musicplayer.cpp
-        musicplayer.h
-        musicplayer.ui
-        songinfo.h
-        filescanner.cpp
-        filescanner.h
-        playercontroller.cpp
-        playercontroller.h
-        playwidget.cpp
-        playwidget.h
-        playwidget.ui
-        turntablealbumwidget.cpp
-        turntablealbumwidget.h
-        aicontroller.h
-        aicontroller.cpp
-        command.h
-        localruleengine.h
-        localruleengine.cpp
-        commandvalidator.h
-        commandvalidator.cpp
-        commanddispatcher.h
-        commanddispatcher.cpp
-        volumesafety.h
-        volumesafety.cpp
-        voiceinputwidget.h
-        voiceinputwidget.cpp
-        voiceinputwidget.ui
-        librarylistdelegate.cpp
-        librarylistdelegate.h
-        listwidget.cpp
-        listwidget.h
-        listwidget.ui
-        beatdetector.cpp
-        beatdetector.h
-        beatlyricwidget.cpp
-        beatlyricwidget.h
-        lrcparser.cpp
-        lrcparser.h
-        lyriclinerow.cpp
-        lyriclinerow.h
-        lyricscrollarea.cpp
-        lyricscrollarea.h
-        micoverlaywidget.cpp
-        micoverlaywidget.h
-        playprogressslider.cpp
-        playprogressslider.h
-        voicechatdelegate.cpp
-        voicechatdelegate.h
-        voicedrawerscrim.cpp
-        voicedrawerscrim.h
-        filescanworker.cpp
-        filescanworker.h
+        app/musicplayer.cpp
+        app/musicplayer.h
+        app/musicplayer.ui
+        model/songinfo.h
+        library/filescanner.cpp
+        library/filescanner.h
+        playback/playercontroller.cpp
+        playback/playercontroller.h
+        playui/playwidget.cpp
+        playui/playwidget.h
+        playui/playwidget.ui
+        playui/turntablealbumwidget.cpp
+        playui/turntablealbumwidget.h
+        commands/aicontroller.h
+        commands/aicontroller.cpp
+        commands/command.h
+        commands/localruleengine.h
+        commands/localruleengine.cpp
+        commands/commandvalidator.h
+        commands/commandvalidator.cpp
+        commands/commanddispatcher.h
+        commands/commanddispatcher.cpp
+        playback/volumesafety.h
+        playback/volumesafety.cpp
+        voice/voiceinputwidget.h
+        voice/voiceinputwidget.cpp
+        voice/voiceinputwidget.ui
+        library/librarylistdelegate.cpp
+        library/librarylistdelegate.h
+        library/listwidget.cpp
+        library/listwidget.h
+        library/listwidget.ui
+        playback/beatdetector.cpp
+        playback/beatdetector.h
+        beatui/beatlyricwidget.cpp
+        beatui/beatlyricwidget.h
+        playback/lrcparser.cpp
+        playback/lrcparser.h
+        lyrics/lyriclinerow.cpp
+        lyrics/lyriclinerow.h
+        lyrics/lyricscrollarea.cpp
+        lyrics/lyricscrollarea.h
+        voice/micoverlaywidget.cpp
+        voice/micoverlaywidget.h
+        playui/playprogressslider.cpp
+        playui/playprogressslider.h
+        voice/voicechatdelegate.cpp
+        voice/voicechatdelegate.h
+        voice/voicedrawerscrim.cpp
+        voice/voicedrawerscrim.h
+        library/filescanworker.cpp
+        library/filescanworker.h
         resources.qrc
 )
 
@@ -77,17 +77,11 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         MANUAL_FINALIZATION
         ${PROJECT_SOURCES}
     )
-# Define target properties for Android with Qt 6 as:
-#    set_property(TARGET MusicPlayer APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
-#                 ${CMAKE_CURRENT_SOURCE_DIR}/android)
-# For more information, see https://doc.qt.io/qt-6/qt-add-executable.html#target-creation
 else()
     if(ANDROID)
         add_library(MusicPlayer SHARED
             ${PROJECT_SOURCES}
         )
-# Define properties for Android with Qt 5 after find_package() calls as:
-#    set(ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
     else()
         add_executable(MusicPlayer
             ${PROJECT_SOURCES}
@@ -105,13 +99,19 @@ target_link_libraries(MusicPlayer PRIVATE
 
 target_include_directories(MusicPlayer PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/app
+    ${CMAKE_CURRENT_SOURCE_DIR}/model
+    ${CMAKE_CURRENT_SOURCE_DIR}/playback
+    ${CMAKE_CURRENT_SOURCE_DIR}/library
+    ${CMAKE_CURRENT_SOURCE_DIR}/playui
+    ${CMAKE_CURRENT_SOURCE_DIR}/lyrics
+    ${CMAKE_CURRENT_SOURCE_DIR}/beatui
+    ${CMAKE_CURRENT_SOURCE_DIR}/voice
+    ${CMAKE_CURRENT_SOURCE_DIR}/commands
     ${TAGLIB_INCLUDE_DIRS}
     ${AUBIO_INCLUDE_DIRS}
 )
 
-# Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
-# If you are developing for iOS or macOS you should consider setting an
-# explicit, fixed bundle identifier manually though.
 if(${QT_VERSION} VERSION_LESS 6.1.0)
   set(BUNDLE_ID_OPTION MACOSX_BUNDLE_GUI_IDENTIFIER com.example.MusicPlayer)
 endif()
