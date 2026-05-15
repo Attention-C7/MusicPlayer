@@ -14,7 +14,7 @@
 namespace {
 
 constexpr int kThumbSide = 48;
-constexpr int kRowPadH = 10;
+constexpr int kRowPadH = 8;
 constexpr int kRowPadV = 8;
 constexpr int kFileRowHeight = 68;
 constexpr int kFolderRowHeight = 48;
@@ -175,17 +175,29 @@ void drawFileRow(QPainter *p, const QStyleOptionViewItem &opt, const QModelIndex
         drawPlaceholderThumb(p, thumbR, path, title);
     }
 
-    const int textLeft = thumbR.right() + 12;
+    const int textLeft = thumbR.right() + 10;
     const QString durStr = formatDurationMs(dur);
     QFontMetrics fmDur(opt.font);
-    const int durW = qMax(56, fmDur.horizontalAdvance(durStr) + 14);
+    const int durNeeded = fmDur.horizontalAdvance(durStr) + 10;
+    const int wFromText = inner.right() - textLeft + 1;
+    constexpr int kGapTitleDur = 6;
+    constexpr int kMinTitlePx = 40;
+    int durW = qBound(36, durNeeded, qMax(36, wFromText - kMinTitlePx - kGapTitleDur));
+    int durX = inner.right() - durW + 1;
+    int titleW = durX - textLeft - kGapTitleDur;
+    if (titleW < 20 && wFromText > 50) {
+        durW = qMax(28, wFromText - 20 - kGapTitleDur);
+        durW = qMin(durW, durNeeded + 6);
+        durX = inner.right() - durW + 1;
+        titleW = qMax(1, durX - textLeft - kGapTitleDur);
+    }
     QFont titleFont = opt.font;
     titleFont.setBold(true);
     const QFontMetrics fmTitle(titleFont);
     const int half = inner.height() / 2;
-    const QRect titleR(textLeft, inner.top(), inner.right() - textLeft - durW, half);
-    const QRect subR(textLeft, inner.top() + half, inner.right() - textLeft - durW, inner.height() - half);
-    const QRect durR(inner.right() - durW, inner.top(), durW, inner.height());
+    const QRect titleR(textLeft, inner.top(), titleW, half);
+    const QRect subR(textLeft, inner.top() + half, titleW, inner.height() - half);
+    const QRect durR(durX, inner.top(), durW, inner.height());
 
     p->save();
     p->setFont(titleFont);
@@ -204,7 +216,10 @@ void drawFileRow(QPainter *p, const QStyleOptionViewItem &opt, const QModelIndex
 
     p->setFont(opt.font);
     p->setPen(QColor("#b0b0c8"));
-    p->drawText(durR, Qt::AlignRight | Qt::AlignVCenter, durStr);
+    const QString durDraw = (fmDur.horizontalAdvance(durStr) <= durW)
+        ? durStr
+        : fmDur.elidedText(durStr, Qt::ElideRight, durW);
+    p->drawText(durR, Qt::AlignRight | Qt::AlignVCenter, durDraw);
     p->restore();
 }
 
@@ -254,18 +269,15 @@ QSize LibraryListDelegate::sizeHint(const QStyleOptionViewItem &option, const QM
         return QStyledItemDelegate::sizeHint(option, index);
     }
     const int t = typeVar.toInt();
-    int w = 320;
-    if (option.widget != nullptr) {
-        w = qMax(200, option.widget->width());
-    }
+    // 宽度 0：行宽随 QListWidget 视口，避免 sizeHint 大于视口触发横向滚动条
     if (t == static_cast<int>(LibraryList::ItemType::folder)) {
-        return QSize(w, kFolderRowHeight);
+        return QSize(0, kFolderRowHeight);
     }
     if (t == static_cast<int>(LibraryList::ItemType::group)) {
-        return QSize(w, kGroupRowHeight);
+        return QSize(0, kGroupRowHeight);
     }
     if (t == static_cast<int>(LibraryList::ItemType::file)) {
-        return QSize(w, kFileRowHeight);
+        return QSize(0, kFileRowHeight);
     }
     return QStyledItemDelegate::sizeHint(option, index);
 }

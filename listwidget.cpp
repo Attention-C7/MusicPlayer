@@ -4,6 +4,7 @@
 
 #include <QAbstractItemView>
 #include <QDir>   //目录，用于操作文件系统：路径规范化与显示名
+#include <QSizePolicy>
 #include <QFileInfo>
 #include <QListWidgetItem>   //列表项，用于显示文件/文件夹/分组：数据绑定、类型识别、样式设置等
 #include <QPainter>
@@ -28,9 +29,20 @@ ListWidget::ListWidget(PlayerController *controller, QWidget *parent)
     ui->listWidget_files->setItemDelegate(m_libraryListDelegate);
     ui->listWidget_files->setSpacing(4);
     ui->listWidget_files->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    ui->listWidget_files->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->listWidget_files->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    ui->listWidget_files->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    if (ui->verticalLayout_main != nullptr) {
+        const int li = ui->verticalLayout_main->indexOf(ui->listWidget_files);
+        if (li >= 0) {
+            ui->verticalLayout_main->setStretch(li, 1);
+        }
+    }
     ui->listWidget_files->setStyleSheet(QStringLiteral(
         "QListWidget { background: rgba(0,0,0,0.2); border: none; outline: none; color: #e8e8ef; }"
-        "QListWidget::item:selected { background: transparent; }"));
+        "QListWidget::item:selected { background: transparent; }"
+        "QScrollBar:vertical { width: 0px; background: transparent; }"
+        "QScrollBar:horizontal { height: 0px; background: transparent; }"));
     setWindowFlags(Qt::FramelessWindowHint);
     setAttribute(Qt::WA_TranslucentBackground);
 
